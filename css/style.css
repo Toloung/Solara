@@ -18,9 +18,10 @@
     --item-current-bg: rgba(108, 165, 254, 0.22);
     --item-current-text: var(--text-color);
     --border-color: rgba(0, 0, 0, 0.1);
-    --lyrics-highlight-bg: rgba(108, 165, 254, 0.16);
-    --lyrics-highlight-text: #2f75e6;
-    --lyrics-highlight-shadow: rgba(108, 165, 254, 0.28);
+    --lyrics-text-color: color-mix(in srgb, var(--primary-color-dark) 22%, var(--text-secondary-color));
+    --lyrics-highlight-bg: rgba(var(--accent-color-rgb), 0.34);
+    --lyrics-highlight-text: var(--primary-color-dark);
+    --lyrics-highlight-shadow: rgba(var(--accent-color-rgb), 0.46);
     --component-bg: rgba(255, 255, 255, 0.5);
     --liquid-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.14) 52%, rgba(108, 165, 254, 0.13));
     --liquid-glass-border: rgba(255, 255, 255, 0.46);
@@ -42,9 +43,10 @@
     --item-hover-bg: rgba(108, 165, 254, 0.12);
     --item-current-bg: rgba(108, 165, 254, 0.22);
     --border-color: rgba(255, 255, 255, 0.15);
-    --lyrics-highlight-bg: rgba(108, 165, 254, 0.18);
-    --lyrics-highlight-text: #bcd7ff;
-    --lyrics-highlight-shadow: rgba(108, 165, 254, 0.36);
+    --lyrics-text-color: color-mix(in srgb, var(--primary-color-dark) 18%, var(--text-secondary-color));
+    --lyrics-highlight-bg: rgba(var(--accent-color-rgb), 0.36);
+    --lyrics-highlight-text: var(--primary-color-dark);
+    --lyrics-highlight-shadow: rgba(var(--accent-color-rgb), 0.54);
     --component-bg: rgba(44, 44, 44, 0.5);
     --liquid-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(13, 18, 30, 0.54) 54%, rgba(108, 165, 254, 0.13));
     --liquid-glass-border: rgba(255, 255, 255, 0.18);
@@ -136,7 +138,7 @@ body.background-transitioning .background-stage__layer--transition {
     grid-template-areas:
         "header header header"
         "search search search"
-        "cover playlist lyrics"
+        "cover lyrics playlist"
         "controls controls controls";
     grid-template-rows: auto auto 1fr 80px;
     grid-template-columns: 300px 1fr 1fr;
@@ -1645,15 +1647,22 @@ html.mobile-view .favorites .favorite-item-action--remove {
 
 .lyrics-content {
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .lyrics-content > div {
     white-space: pre-wrap;
-    padding: 5px;
-    margin-bottom: 5px;
+    width: fit-content;
+    max-width: calc(100% - 18px);
+    padding: 5px 10px;
+    margin: 0 auto 5px;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    max-width: 100%;
+    color: var(--lyrics-text-color);
+    border-radius: 12px;
+    transition: color 0.22s ease, background-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
 /* 当歌词容器只有默认文本时的样式 */
@@ -1678,11 +1687,11 @@ html[lang="en"] .lyrics.empty[data-placeholder="default"] .lyrics-scroll::before
 }
 .lyrics .current { 
     color: var(--lyrics-highlight-text); 
-    font-weight: 700; 
+    font-weight: 800; 
     background-color: var(--lyrics-highlight-bg); 
-    transform: scale(1.05); 
-    box-shadow: 0 10px 28px var(--lyrics-highlight-shadow); 
-    border-radius: 14px;
+    transform: scale(1.02); 
+    box-shadow: 0 8px 22px var(--lyrics-highlight-shadow); 
+    border-radius: 12px;
 }
 
 /* 控制区域 */
