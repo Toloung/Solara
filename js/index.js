@@ -15,7 +15,6 @@ const dom = {
     mobileInlineLyricsContent: document.getElementById("mobileInlineLyricsContent"),
     audioPlayer: document.getElementById("audioPlayer"),
     themeToggleButton: document.getElementById("themeToggleButton"),
-    loadOnlineBtn: document.getElementById("loadOnlineBtn"),
     showPlaylistBtn: document.getElementById("showPlaylistBtn"),
     showLyricsBtn: document.getElementById("showLyricsBtn"),
     searchInput: document.getElementById("searchInput"),
@@ -60,7 +59,6 @@ const dom = {
     mobileExportFavoritesBtn: document.getElementById("mobileExportFavoritesBtn"),
     mobileClearFavoritesBtn: document.getElementById("mobileClearFavoritesBtn"),
     mobileOverlayScrim: document.getElementById("mobileOverlayScrim"),
-    mobileExploreButton: document.getElementById("mobileExploreButton"),
     mobileQualityToggle: document.getElementById("mobileQualityToggle"),
     mobileQualityLabel: document.getElementById("mobileQualityLabel"),
     mobilePanel: document.getElementById("mobilePanel"),
@@ -74,11 +72,6 @@ const dom = {
     importFavoritesInput: document.getElementById("importFavoritesInput"),
     clearFavoritesBtn: document.getElementById("clearFavoritesBtn"),
     currentFavoriteToggle: document.getElementById("currentFavoriteToggle"),
-    settingsModal: document.getElementById("settingsModal"),
-    closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-    saveSettingsBtn: document.getElementById("saveSettingsBtn"),
-    openSettingsBtn: document.getElementById("openSettingsBtn"),
-    radarGenreList: document.getElementById("radarGenreList"),
     logo: document.querySelector(".header h1"),
 };
 
@@ -379,7 +372,6 @@ const STORAGE_KEYS_TO_SYNC = new Set([
     "favoritePlaybackTime",
     "searchSource",
     "lastSearchState.v1",
-    "radarSettings",
 ]);
 
 function createPersistentStorageClient() {
@@ -760,7 +752,7 @@ function normalizeSource(value) {
 const QUALITY_OPTIONS = [
     { value: "128", label: "标准音质", description: "128 kbps" },
     { value: "192", label: "高品音质", description: "192 kbps" },
-    { value: "320", label: "极高音质", description: "320 kbps" },
+    { value: "320", label: "320 kbps", description: "320 kbps" },
     { value: "999", label: "无损音质", description: "FLAC" }
 ];
 
@@ -1195,17 +1187,6 @@ function applyPersistentSnapshotFromRemote(data) {
             state.playlistSongs = playlist.map(withCoverUrl);
             safeSetLocalStorage("playlistSongs", data.playlistSongs, { skipRemote: true });
             playlistUpdated = true;
-        }
-    }
-
-    if (typeof data.radarSettings === "string") {
-        const radarSettings = parseJSON(data.radarSettings, null);
-        if (radarSettings) {
-            state.radarSettings = radarSettings;
-            safeSetLocalStorage("radarSettings", data.radarSettings, { skipRemote: true });
-            if (typeof applySettingsToUI === "function") {
-                applySettingsToUI();
-            }
         }
     }
 
@@ -3558,18 +3539,6 @@ function setupInteractions() {
                 return;
             }
             closeMobileInlineLyrics();
-        });
-    }
-
-    if (dom.loadOnlineBtn) {
-        dom.loadOnlineBtn.addEventListener("click", exploreOnlineMusic);
-    }
-    if (dom.mobileExploreButton) {
-        dom.mobileExploreButton.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            closeAllMobileOverlays();
-            exploreOnlineMusic();
         });
     }
 
@@ -5982,159 +5951,9 @@ async function playOnlineSong(index) {
         updatePlayModeUI();
         renderPlaylist();
         updatePlaylistActionStates();
-        
-        // 可选：如果希望继续高亮“探索雷达”中的项，保留对 updateOnlineHighlight 的调用
-        // updateOnlineHighlight();
     } catch (error) {
         console.error("播放失败:", error);
         showNotification("播放失败，请稍后重试", "error");
-    }
-}
-
-// 修复：更新在线音乐高亮
-function updateOnlineHighlight() {
-    if (!dom.playlistItems) return;
-    const playlistItems = dom.playlistItems.querySelectorAll(".playlist-item");
-    playlistItems.forEach((item, index) => {
-        if (state.currentPlaylist === "online" && index === state.currentTrackIndex) {
-            item.classList.add("current");
-        } else {
-            item.classList.remove("current");
-        }
-    });
-}
-
-const EXPLORE_RADAR_GENRES = [
-    "流行",
-    "摇滚",
-    "古典音乐",
-    "民谣",
-    "电子",
-    "爵士",
-    "说唱",
-    "乡村",
-    "蓝调",
-    "R&B",
-    "金属",
-    "嘻哈",
-    "轻音乐",
-];
-
-function pickRandomExploreGenre() {
-    const genres = (state.radarSettings && state.radarSettings.genres && state.radarSettings.genres.length > 0)
-        ? state.radarSettings.genres
-        : EXPLORE_RADAR_GENRES;
-    
-    const index = Math.floor(Math.random() * genres.length);
-    return genres[index];
-}
-
-const EXPLORE_RADAR_SOURCES = ["netease", "kuwo"];
-
-function pickRandomExploreSource() {
-    if (!Array.isArray(EXPLORE_RADAR_SOURCES) || EXPLORE_RADAR_SOURCES.length === 0) {
-        return "netease";
-    }
-    const index = Math.floor(Math.random() * EXPLORE_RADAR_SOURCES.length);
-    return EXPLORE_RADAR_SOURCES[index];
-}
-
-// 探索雷达：通过代理后端随机搜歌并刷新播放列表
-async function exploreOnlineMusic() {
-    const desktopButton = dom.loadOnlineBtn;
-    const mobileButton = dom.mobileExploreButton;
-    const btnText = desktopButton ? desktopButton.querySelector(".btn-text") : null;
-    const loader = desktopButton ? desktopButton.querySelector(".loader") : null;
-
-    const setLoadingState = (isLoading) => {
-        if (desktopButton) {
-            desktopButton.disabled = isLoading;
-            desktopButton.classList.toggle("is-loading", Boolean(isLoading));
-            if (btnText) {
-                btnText.style.display = isLoading ? "none" : "";
-            }
-            if (loader) {
-                loader.style.display = isLoading ? "inline-flex" : "none";
-            }
-        }
-        if (mobileButton) {
-            mobileButton.disabled = isLoading;
-            mobileButton.setAttribute("aria-disabled", isLoading ? "true" : "false");
-        }
-    };
-
-    try {
-        setLoadingState(true);
-
-        const randomGenre = pickRandomExploreGenre();
-        const source = pickRandomExploreSource();
-        const results = await API.search(randomGenre, source, 30, 1);
-
-        if (!Array.isArray(results) || results.length === 0) {
-            showNotification("探索雷达：未找到歌曲", "error");
-            debugLog(`探索雷达未找到歌曲，关键词：${randomGenre}，音源：${source}`);
-            return;
-        }
-
-        const normalizedSongs = results.map((song) => withCoverUrl({
-            id: song.id,
-            name: song.name,
-            artist: Array.isArray(song.artist) ? song.artist.join(" / ") : (song.artist || "未知艺术家"),
-            album: song.album || "",
-            source: song.source || source,
-            lyric_id: song.lyric_id || song.id,
-            pic_id: song.pic_id || song.pic || "",
-            coverUrl: song.coverUrl || song.pic_url || song.picUrl || song.cover || song.image || "",
-            url_id: song.url_id,
-            api_path: song.api_path,
-            j8y_api_path: song.j8y_api_path,
-        }));
-
-        const existingSongs = Array.isArray(state.playlistSongs) ? state.playlistSongs.slice() : [];
-        const existingKeys = new Set(existingSongs
-            .map((song) => getSongKey(song))
-            .filter((key) => typeof key === "string" && key.length > 0));
-
-        const appendedSongs = [];
-        for (const song of normalizedSongs) {
-            const key = getSongKey(song);
-            if (key && existingKeys.has(key)) {
-                continue;
-            }
-            appendedSongs.push(song);
-            if (key) {
-                existingKeys.add(key);
-            }
-        }
-
-        if (appendedSongs.length === 0) {
-            showNotification("探索雷达：本次未找到新的歌曲，当前列表已包含这些曲目", "info");
-            debugLog(`探索雷达无新增歌曲，关键词：${randomGenre}`);
-            return;
-        }
-
-        state.playlistSongs = existingSongs.concat(appendedSongs);
-        state.onlineSongs = state.playlistSongs.slice();
-        state.currentPlaylist = "playlist";
-        state.currentList = "playlist";
-
-        renderPlaylist();
-        updatePlaylistHighlight();
-
-        showNotification(`探索雷达：新增${appendedSongs.length}首 ${randomGenre} 歌曲`);
-        debugLog(`探索雷达加载成功，关键词：${randomGenre}，音源：${source}，新增歌曲数：${appendedSongs.length}`);
-
-        const shouldAutoplay = existingSongs.length === 0 && state.playlistSongs.length > 0;
-        if (shouldAutoplay) {
-            await playPlaylistSong(0);
-        } else {
-            savePlayerState();
-        }
-    } catch (error) {
-        console.error("探索雷达错误:", error);
-        showNotification("探索雷达获取失败，请稍后重试", "error");
-    } finally {
-        setLoadingState(false);
     }
 }
 
@@ -6420,141 +6239,3 @@ function showNotification(message, type = "success") {
         notification.classList.remove("show");
     }, 3000);
 }
-
-// --- 设置与探索雷达自定义 ---
-
-function initSettings() {
-    // 渲染风格列表
-    renderGenreList();
-
-    // 绑定 Logo 双击事件
-    if (dom.logo) {
-        dom.logo.addEventListener("dblclick", openSettingsModal);
-    }
-    
-    // 移动端双击标题或图标打开设置 (优化移动端双击兼容性)
-    let lastToolbarClick = 0;
-    const handleDoubleTap = (e) => {
-        const now = Date.now();
-        if (now - lastToolbarClick < 300) {
-            e.preventDefault();
-            openSettingsModal();
-        }
-        lastToolbarClick = now;
-    };
-
-    if (dom.mobileToolbarTitle) {
-        dom.mobileToolbarTitle.addEventListener("click", handleDoubleTap);
-    }
-
-    // 绑定按钮事件
-    if (dom.closeSettingsBtn) {
-        dom.closeSettingsBtn.addEventListener("click", closeSettingsModal);
-    }
-    if (dom.saveSettingsBtn) {
-        dom.saveSettingsBtn.addEventListener("click", saveSettings);
-    }
-    // 绑定齿轮图标按钮
-    const openBtn = dom.openSettingsBtn || document.getElementById("openSettingsBtn");
-    if (openBtn) {
-        openBtn.addEventListener("click", openSettingsModal);
-    }
-    if (dom.settingsModal) {
-        dom.settingsModal.addEventListener("click", (e) => {
-            if (e.target === dom.settingsModal) closeSettingsModal();
-        });
-    }
-
-    // 加载设置
-    loadSettings();
-}
-
-function renderGenreList() {
-    if (!dom.radarGenreList) return;
-    
-    dom.radarGenreList.innerHTML = EXPLORE_RADAR_GENRES.map(genre => `
-        <div class="genre-item">
-            <input type="checkbox" id="genre-${genre}" value="${genre}" checked>
-            <label for="genre-${genre}" class="genre-label">${genre}</label>
-        </div>
-    `).join("");
-}
-
-function openSettingsModal() {
-    if (dom.settingsModal) {
-        dom.settingsModal.classList.add("show");
-        dom.settingsModal.setAttribute("aria-hidden", "false");
-    }
-}
-
-function closeSettingsModal() {
-    if (dom.settingsModal) {
-        dom.settingsModal.classList.remove("show");
-        dom.settingsModal.setAttribute("aria-hidden", "true");
-    }
-}
-
-async function saveSettings() {
-    const selectedGenres = Array.from(dom.radarGenreList.querySelectorAll("input:checked")).map(cb => cb.value);
-    
-    if (selectedGenres.length === 0) {
-        showNotification("请至少选择一个风格", "warning");
-        return;
-    }
-
-    state.radarSettings = {
-        genres: selectedGenres
-    };
-
-    // 本地保存
-    safeSetLocalStorage("radarSettings", JSON.stringify(state.radarSettings));
-
-    // 云同步会自动被 STORAGE_KEYS_TO_SYNC 机制处理，但我们这里手动触发一次以确保即时性
-    if (typeof persistStorageItems === "function") {
-        persistStorageItems({
-            radarSettings: JSON.stringify(state.radarSettings)
-        });
-    }
-
-    showNotification("设置已保存", "success");
-    closeSettingsModal();
-}
-
-async function loadSettings() {
-    // 1. 从本地加载 (作为兜底)
-    let localSettings = safeGetLocalStorage("radarSettings");
-    if (localSettings) {
-        try {
-            state.radarSettings = JSON.parse(localSettings);
-            applySettingsToUI();
-        } catch (e) {
-            console.error("解析本地设置失败:", e);
-        }
-    }
-    // 注意：云端加载已在 bootstrapPersistentStorage 中统一处理
-}
-
-function applySettingsToUI() {
-    if (!state.radarSettings || !state.radarSettings.genres || !dom.radarGenreList) return;
-    
-    const checkboxes = dom.radarGenreList.querySelectorAll("input[type='checkbox']");
-    checkboxes.forEach(cb => {
-        cb.checked = state.radarSettings.genres.includes(cb.value);
-    });
-}
-
-// 在 bootstrapPersistentStorage 之后或期间初始化设置
-(function() {
-    const originalBootstrap = bootstrapPersistentStorage;
-    bootstrapPersistentStorage = async function() {
-        await originalBootstrap();
-        initSettings();
-    };
-})();
-
-// 如果页面没有启用云同步，也要初始化设置
-document.addEventListener("DOMContentLoaded", () => {
-    if (!remoteSyncEnabled) {
-        initSettings();
-    }
-});
