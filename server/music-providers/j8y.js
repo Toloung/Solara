@@ -7,6 +7,22 @@ const SONG_NAME_FIELDS = ['name', 'title', 'songName'];
 const ARTIST_FIELDS = ['artist', 'author', 'artists', 'ar', 'singer'];
 const SONG_ID_FIELDS = ['id', 'songId', 'songid'];
 const COVER_FIELDS = ['pic', 'cover', 'albumPic', 'picUrl', 'image'];
+const IMAGE_URL_FIELDS = [
+  ...COVER_FIELDS,
+  'album_img',
+  'albumImage',
+  'img',
+  'imgUrl',
+  'coverUrl',
+  'cover_url',
+  'album_pic',
+  'albumPicUrl',
+  'thumbnail',
+  'thumb',
+  'poster',
+  'artwork',
+];
+const LYRIC_FIELDS = ['lyric', 'lyrics', 'lrc', 'text', 'content', 'lyricText', 'lrcContent', 'words', 'word', 'yrc'];
 
 function splitList(value, fallback) {
   if (typeof value !== 'string') return fallback.slice();
@@ -88,11 +104,36 @@ function findAudioUrl(payload) {
     || '';
 }
 
+function extractUrlsFromString(value) {
+  return String(value || '').match(/https?:\/\/[^\s"'<>\\]+/gi) || [];
+}
+
+function findImageUrl(payload) {
+  const urls = collectObjects(payload)
+    .flatMap((item) => IMAGE_URL_FIELDS.map((field) => item[field]))
+    .flatMap((value) => {
+      if (!value) return [];
+      if (typeof value === 'string') return extractUrlsFromString(value);
+      if (typeof value === 'object') return [findImageUrl(value)].filter(Boolean);
+      return extractUrlsFromString(value);
+    });
+
+  return urls.find((url) => /\.(jpe?g|png|webp|gif|bmp|avif)(\?|$)/i.test(url))
+    || urls.find((url) => /^https?:\/\//i.test(url) && !/\.(mp3|flac|m4a|aac|wav)(\?|$)/i.test(url))
+    || '';
+}
+
 function extractLyric(payload) {
   const objects = collectObjects(payload);
   for (const item of objects) {
-    const lyric = item.lyric || item.lyrics || item.lrc || item.text;
-    if (typeof lyric === 'string' && lyric.trim()) return lyric;
+    for (const field of LYRIC_FIELDS) {
+      const lyric = item[field];
+      if (typeof lyric === 'string' && lyric.trim()) return lyric;
+      if (lyric && typeof lyric === 'object') {
+        const nestedLyric = extractLyric(lyric);
+        if (nestedLyric) return nestedLyric;
+      }
+    }
   }
   return '';
 }
@@ -104,11 +145,20 @@ function getAlbumName(item) {
   return '';
 }
 
+function normalizeCoverValue(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    return extractUrlsFromString(value)[0] || value;
+  }
+  if (typeof value === 'object') return findImageUrl(value);
+  return String(value);
+}
+
 function normalizeSong(item, apiPath) {
   const id = getFirstValue(item, SONG_ID_FIELDS);
   const name = getFirstValue(item, SONG_NAME_FIELDS);
   const artist = getFirstValue(item, ARTIST_FIELDS);
-  const cover = getFirstValue(item, COVER_FIELDS);
+  const cover = normalizeCoverValue(getFirstValue(item, COVER_FIELDS)) || findImageUrl(item);
 
   if (!name || id === '') return null;
 
@@ -117,7 +167,8 @@ function normalizeSong(item, apiPath) {
     name: String(name),
     artist: normalizeArtist(artist) || 'Unknown artist',
     album: getAlbumName(item),
-    pic_id: cover ? String(cover) : '',
+    pic_id: cover,
+    pic_url: cover,
     url_id: String(id),
     lyric_id: String(id),
     source: 'j8y',
@@ -278,21 +329,52 @@ async function resolveJ8ySongUrl(url, config, req) {
   return { status: 502, body: JSON.stringify({ error: message }) };
 }
 
+async function resolveJ8yPicUrl(url, config, req) {
+  const id = url.searchParams.get('id') || url.searchParams.get('pic_id') || '';
+  if (!id) return { status: 200, body: JSON.stringify({ url: '' }) };
+  if (/^https?:\/\//i.test(id)) {
+    return { status: 200, body: JSON.stringify({ url: id, source: 'j8y' }) };
+  }
+
+  for (const apiPath of getCandidateApiPaths(url, config)) {
+    try {
+      const payload = await fetchJ8yApi(apiPath, {
+        action: 'song',
+        id,
+        level: config.level,
+      }, config, req);
+      const imageUrl = findImageUrl(payload);
+      if (imageUrl) {
+        return {
+          status: 200,
+          body: JSON.stringify({ url: imageUrl, source: 'j8y', api_path: apiPath, j8y_api_path: apiPath }),
+        };
+      }
+    } catch {
+      // Cover art is optional; fall through to the next path.
+    }
+  }
+
+  return { status: 200, body: JSON.stringify({ url: '' }) };
+}
+
 async function getJ8yLyric(url, config, req) {
   const id = url.searchParams.get('id') || '';
   if (!id) return { status: 200, body: JSON.stringify({ lyric: '' }) };
 
   for (const apiPath of getCandidateApiPaths(url, config)) {
-    try {
-      const payload = await fetchJ8yApi(apiPath, {
-        action: 'lyric',
-        id,
-        level: config.level,
-      }, config, req);
-      const lyric = extractLyric(payload);
-      if (lyric) return { status: 200, body: JSON.stringify({ lyric }) };
-    } catch {
-      // Some j8y paths may not expose lyrics. Keep the UI quiet.
+    for (const action of ['lyric', 'song']) {
+      try {
+        const payload = await fetchJ8yApi(apiPath, {
+          action,
+          id,
+          level: config.level,
+        }, config, req);
+        const lyric = extractLyric(payload);
+        if (lyric) return { status: 200, body: JSON.stringify({ lyric }) };
+      } catch {
+        // Some j8y paths may not expose lyrics. Keep the UI quiet.
+      }
     }
   }
 
@@ -316,6 +398,8 @@ async function handleJ8yProxyRequest(url, req, env = process.env) {
     response = await searchJ8y(url, config, req);
   } else if (type === 'url') {
     response = await resolveJ8ySongUrl(url, config, req);
+  } else if (type === 'pic') {
+    response = await resolveJ8yPicUrl(url, config, req);
   } else if (type === 'lyric') {
     response = await getJ8yLyric(url, config, req);
   } else {
@@ -333,5 +417,6 @@ module.exports = {
   handleJ8yProxyRequest,
   collectObjects,
   findAudioUrl,
+  findImageUrl,
   normalizeSearchResults,
 };

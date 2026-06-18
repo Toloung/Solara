@@ -919,10 +919,25 @@ const API = {
 
     getPicUrl: (song) => {
         const signature = API.generateSignature();
-        if (song.pic_id && /^https?:\/\//i.test(String(song.pic_id))) {
-            return preferHttpsUrl(String(song.pic_id));
+        const source = song.source || "netease";
+        const params = new URLSearchParams({
+            types: "pic",
+            id: song.pic_id || "",
+            source,
+            size: "300",
+            s: signature,
+        });
+        const apiPath = song.api_path || song.j8y_api_path;
+        if (apiPath) {
+            params.set("api_path", apiPath);
         }
-        return `${API.baseUrl}?types=pic&id=${song.pic_id}&source=${song.source || "netease"}&size=300&s=${signature}`;
+        if (song.pic_id && /^https?:\/\//i.test(String(song.pic_id))) {
+            if (String(source).toLowerCase() !== "j8y") {
+                return preferHttpsUrl(String(song.pic_id));
+            }
+            params.set("id", preferHttpsUrl(String(song.pic_id)));
+        }
+        return `${API.baseUrl}?${params.toString()}`;
     }
 };
 
