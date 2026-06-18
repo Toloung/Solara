@@ -154,6 +154,14 @@ function normalizeCoverValue(value) {
   return String(value);
 }
 
+function buildProxiedImageUrl(imageUrl) {
+  if (!imageUrl) return '';
+  const params = new URLSearchParams({
+    url: imageUrl,
+  });
+  return `/api/cover?${params.toString()}`;
+}
+
 function normalizeSong(item, apiPath) {
   const id = getFirstValue(item, SONG_ID_FIELDS);
   const name = getFirstValue(item, SONG_NAME_FIELDS);
@@ -169,6 +177,7 @@ function normalizeSong(item, apiPath) {
     album: getAlbumName(item),
     pic_id: cover || String(id),
     pic_url: cover,
+    coverUrl: cover,
     url_id: String(id),
     lyric_id: String(id),
     source: 'j8y',
@@ -333,7 +342,10 @@ async function resolveJ8yPicUrl(url, config, req) {
   const id = url.searchParams.get('id') || url.searchParams.get('pic_id') || '';
   if (!id) return { status: 200, body: JSON.stringify({ url: '' }) };
   if (/^https?:\/\//i.test(id)) {
-    return { status: 200, body: JSON.stringify({ url: id, source: 'j8y' }) };
+    return {
+      status: 200,
+      body: JSON.stringify({ url: buildProxiedImageUrl(id), raw_url: id, source: 'j8y' }),
+    };
   }
 
   for (const apiPath of getCandidateApiPaths(url, config)) {
@@ -347,7 +359,13 @@ async function resolveJ8yPicUrl(url, config, req) {
       if (imageUrl) {
         return {
           status: 200,
-          body: JSON.stringify({ url: imageUrl, source: 'j8y', api_path: apiPath, j8y_api_path: apiPath }),
+          body: JSON.stringify({
+            url: buildProxiedImageUrl(imageUrl),
+            raw_url: imageUrl,
+            source: 'j8y',
+            api_path: apiPath,
+            j8y_api_path: apiPath,
+          }),
         };
       }
     } catch {

@@ -328,6 +328,11 @@ function toggleMobileInlineLyrics() {
 }
 
 const PLACEHOLDER_HTML = `<div class="placeholder"><i class="fas fa-music"></i></div>`;
+const DEFAULT_COVER_URL = "/assets/default-cover.png";
+const COVER_FIELD_NAMES = [
+    "coverUrl", "cover_url", "pic_url", "picUrl", "pic", "cover", "image", "img",
+    "albumPic", "album_pic", "songPic", "artwork", "thumbnail", "thumb"
+];
 const paletteCache = new Map();
 const PALETTE_STORAGE_KEY = "paletteCache.v1";
 let paletteAbortController = null;
@@ -624,6 +629,103 @@ function toAbsoluteUrl(url) {
     }
 }
 
+function normalizeCoverUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") {
+        return "";
+    }
+
+    const trimmed = rawUrl.trim();
+    if (!trimmed || trimmed === "null" || trimmed === "undefined") {
+        return "";
+    }
+    if (/^data:image\//i.test(trimmed)) {
+        return trimmed;
+    }
+    if (/^\/\//.test(trimmed)) {
+        return preferHttpsUrl(`https:${trimmed}`);
+    }
+    if (/^https?:\/\//i.test(trimmed) || /^\//.test(trimmed)) {
+        return preferHttpsUrl(toAbsoluteUrl(trimmed));
+    }
+    return "";
+}
+
+function collectCoverCandidates(value, result = [], seen = new Set()) {
+    if (!value) return result;
+    if (typeof value === "string") {
+        result.push(value);
+        return result;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectCoverCandidates(item, result, seen));
+        return result;
+    }
+    if (typeof value !== "object" || seen.has(value)) {
+        return result;
+    }
+
+    seen.add(value);
+    for (const field of COVER_FIELD_NAMES) {
+        if (value[field]) {
+            collectCoverCandidates(value[field], result, seen);
+        }
+    }
+    if (value.album) collectCoverCandidates(value.album, result, seen);
+    if (value.al) collectCoverCandidates(value.al, result, seen);
+    if (value.artists) collectCoverCandidates(value.artists, result, seen);
+    if (value.ar) collectCoverCandidates(value.ar, result, seen);
+    return result;
+}
+
+function extractCoverUrl(song) {
+    if (!song || typeof song !== "object") {
+        return "";
+    }
+
+    const candidates = collectCoverCandidates(song);
+    if (song.pic_id && /^https?:\/\//i.test(String(song.pic_id))) {
+        candidates.push(String(song.pic_id));
+    }
+    for (const candidate of candidates) {
+        const coverUrl = normalizeCoverUrl(candidate);
+        if (coverUrl) return coverUrl;
+    }
+    return "";
+}
+
+function withCoverUrl(song) {
+    if (!song || typeof song !== "object") {
+        return song;
+    }
+    const coverUrl = normalizeCoverUrl(song.coverUrl) || extractCoverUrl(song);
+    return coverUrl ? { ...song, coverUrl } : { ...song };
+}
+
+function isCoverProxyUrl(url) {
+    if (!url || typeof url !== "string") return false;
+    try {
+        const parsed = new URL(url, window.location.href);
+        return parsed.pathname === "/api/cover";
+    } catch (_) {
+        return false;
+    }
+}
+
+function getArtworkLookupId(song) {
+    if (!song || typeof song !== "object") {
+        return "";
+    }
+    const source = String(song.source || "").toLowerCase();
+    const rawCoverUrl = normalizeCoverUrl(song.rawCoverUrl);
+    if (source === "j8y" && rawCoverUrl) return rawCoverUrl;
+    const directCover = normalizeCoverUrl(song.coverUrl) || extractCoverUrl(song);
+    if (isCoverProxyUrl(directCover)) return directCover;
+    if (source === "j8y" && directCover) return directCover;
+    if (song.pic_id) return String(song.pic_id);
+    if (source === "j8y" && song.id) return String(song.id);
+    return directCover;
+}
+
 function buildAudioProxyUrl(url) {
     if (!url || typeof url !== "string") return url;
 
@@ -666,7 +768,7 @@ function normalizeQuality(value) {
 const savedPlaylistSongs = (() => {
     const stored = safeGetLocalStorage("playlistSongs");
     const playlist = parseJSON(stored, []);
-    return Array.isArray(playlist) ? playlist : [];
+    return Array.isArray(playlist) ? playlist.map(withCoverUrl) : [];
 })();
 
 const PLAYLIST_EXPORT_VERSION = 1;
@@ -674,7 +776,7 @@ const PLAYLIST_EXPORT_VERSION = 1;
 const savedFavoriteSongs = (() => {
     const stored = safeGetLocalStorage("favoriteSongs");
     const favorites = parseJSON(stored, []);
-    return Array.isArray(favorites) ? favorites : [];
+    return Array.isArray(favorites) ? favorites.map(withCoverUrl) : [];
 })();
 
 const FAVORITE_EXPORT_VERSION = 1;
@@ -751,7 +853,7 @@ const savedPlaybackTime = (() => {
 
 const savedCurrentSong = (() => {
     const stored = safeGetLocalStorage("currentSong");
-    return parseJSON(stored, null);
+    return withCoverUrl(parseJSON(stored, null));
 })();
 
 const savedCurrentPlaylist = (() => {
@@ -815,12 +917,13 @@ const API = {
 
             if (!Array.isArray(data)) throw new Error("搜索结果格式错误");
 
-            return data.map(song => ({
+            return data.map(song => withCoverUrl({
                 id: song.id,
                 name: song.name,
                 artist: song.artist,
                 album: song.album,
                 pic_id: song.pic_id,
+                coverUrl: song.coverUrl || song.pic_url || song.raw_url || "",
                 url_id: song.url_id,
                 lyric_id: song.lyric_id,
                 source: song.source,
@@ -872,13 +975,15 @@ const API = {
 
             if (tracks.length === 0) throw new Error("No tracks found");
 
-            return tracks.map(track => ({
+            return tracks.map(track => withCoverUrl({
                 id: track.id,
                 name: track.name,
                 artist: Array.isArray(track.ar) ? track.ar.map(artist => artist.name).join(" / ") : "",
+                album: track.al?.name || "",
                 source: "netease",
                 lyric_id: track.id,
                 pic_id: track.al?.pic_str || track.al?.pic || track.al?.picUrl || "",
+                coverUrl: track.al?.picUrl || "",
             }));
         } catch (error) {
             console.error("API request failed:", error);
@@ -922,7 +1027,7 @@ const API = {
         const source = song.source || "netease";
         const params = new URLSearchParams({
             types: "pic",
-            id: song.pic_id || "",
+            id: getArtworkLookupId(song),
             source,
             size: "300",
             s: signature,
@@ -931,11 +1036,15 @@ const API = {
         if (apiPath) {
             params.set("api_path", apiPath);
         }
-        if (song.pic_id && /^https?:\/\//i.test(String(song.pic_id))) {
+        const artworkId = getArtworkLookupId(song);
+        if (/^data:image\//i.test(String(artworkId)) || isCoverProxyUrl(artworkId)) {
+            return normalizeCoverUrl(String(artworkId)) || String(artworkId);
+        }
+        if (artworkId && /^https?:\/\//i.test(String(artworkId))) {
             if (String(source).toLowerCase() !== "j8y") {
-                return preferHttpsUrl(String(song.pic_id));
+                return preferHttpsUrl(String(artworkId));
             }
-            params.set("id", preferHttpsUrl(String(song.pic_id)));
+            params.set("id", preferHttpsUrl(String(artworkId)));
         }
         return `${API.baseUrl}?${params.toString()}`;
     }
@@ -1030,6 +1139,7 @@ function validateStateConsistency() {
 // 规范化收藏夹数据
 state.favoriteSongs = (typeof ensureFavoriteSongsArray === "function" ? ensureFavoriteSongsArray() : (state.favoriteSongs || []))
     .map((song) => (typeof sanitizeImportedSong === "function" ? sanitizeImportedSong(song) : song) || song)
+    .map(withCoverUrl)
     .filter((song) => song && typeof song === "object");
 
 // 确保 currentList 状态正确
@@ -1078,7 +1188,7 @@ function applyPersistentSnapshotFromRemote(data) {
     if (typeof data.playlistSongs === "string") {
         const playlist = parseJSON(data.playlistSongs, []);
         if (Array.isArray(playlist)) {
-            state.playlistSongs = playlist;
+            state.playlistSongs = playlist.map(withCoverUrl);
             safeSetLocalStorage("playlistSongs", data.playlistSongs, { skipRemote: true });
             playlistUpdated = true;
         }
@@ -1135,7 +1245,7 @@ function applyPersistentSnapshotFromRemote(data) {
     if (typeof data.currentSong === "string" && data.currentSong) {
         const currentSong = parseJSON(data.currentSong, null);
         if (currentSong) {
-            state.currentSong = currentSong;
+            state.currentSong = withCoverUrl(currentSong);
             safeSetLocalStorage("currentSong", data.currentSong, { skipRemote: true });
         }
     }
@@ -1151,7 +1261,7 @@ function applyPersistentSnapshotFromRemote(data) {
     if (typeof data.favoriteSongs === "string") {
         const favorites = parseJSON(data.favoriteSongs, []);
         if (Array.isArray(favorites)) {
-            state.favoriteSongs = favorites;
+            state.favoriteSongs = favorites.map(withCoverUrl);
             safeSetLocalStorage("favoriteSongs", data.favoriteSongs, { skipRemote: true });
         }
     }
@@ -1287,6 +1397,14 @@ bootstrapPersistentStorage();
             return 'image/png';
         }
 
+        try {
+            const parsed = new URL(url, window.location.href);
+            const proxiedUrl = parsed.searchParams.get("url");
+            if (proxiedUrl && proxiedUrl !== url) {
+                return getArtworkMime(proxiedUrl);
+            }
+        } catch (_) {}
+
         const normalized = url.split('?')[0].toLowerCase();
         if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
             return 'image/jpeg';
@@ -1307,44 +1425,57 @@ bootstrapPersistentStorage();
     }
 
     function getArtworkList(url) {
-        // iOS/Safari 建议多尺寸封面；你的 API 已有 pic_id -> pic url（300），这里做兜底多尺寸
-        // 注意：尽量提供 https 链接；你的项目里已有 preferHttpsUrl/buildAudioProxyUrl 工具函数
-        const src = (typeof preferHttpsUrl === 'function') ? preferHttpsUrl(url) : (url || '');
-        // 如果没有封面，用默认封面兜底
-        const fallback = '/favicon.png';
-        const baseSrc = src || fallback;
-        const base = toAbsoluteUrl(baseSrc);
+        const src = normalizeCoverUrl(url) || DEFAULT_COVER_URL;
+        const base = toAbsoluteUrl(src);
         const type = getArtworkMime(base);
         return [
-            { src: base, sizes: '1024x1024', type },
-            { src: base, sizes: '640x640', type },
-            { src: base, sizes: '512x512', type },
-            { src: base, sizes: '384x384', type },
-            { src: base, sizes: '256x256', type },
-            { src: base, sizes: '192x192', type },
+            { src: base, sizes: '96x96', type },
             { src: base, sizes: '128x128', type },
-            { src: base, sizes: '96x96',  type }
+            { src: base, sizes: '192x192', type },
+            { src: base, sizes: '256x256', type },
+            { src: base, sizes: '384x384', type },
+            { src: base, sizes: '512x512', type },
         ];
     }
 
+    function getMediaSessionCoverUrl(song) {
+        return normalizeCoverUrl(state.currentArtworkUrl) ||
+            normalizeCoverUrl(song.coverUrl) ||
+            extractCoverUrl(song) ||
+            DEFAULT_COVER_URL;
+    }
+
+    function getStringArtist(artist) {
+        if (Array.isArray(artist)) {
+            return artist.filter(Boolean).join(" / ");
+        }
+        return artist || "";
+    }
+
     function updateMediaMetadata() {
-        // 依赖现有全局 state.currentSong；已在项目中使用 localStorage 保存/恢复。:contentReference[oaicite:7]{index=7}
         const song = state.currentSong || {};
-        const title = song.name || dom.currentSongTitle?.textContent || 'Music';
-        const artist = song.artist || dom.currentSongArtist?.textContent || '';
-        const artworkUrl = state.currentArtworkUrl || '';
+        const title = song.name || song.title || dom.currentSongTitle?.textContent || 'Music';
+        const artist = getStringArtist(song.artist || song.singer) || dom.currentSongArtist?.textContent || '';
+        const artworkUrl = getMediaSessionCoverUrl(song);
+        const artwork = getArtworkList(artworkUrl);
+        console.debug('[Media Session] metadata cover', { song, coverUrl: artworkUrl, artwork });
 
         try {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title,
                 artist,
                 album: song.album || '',
-                artwork: getArtworkList(artworkUrl)
+                artwork,
             });
         } catch (e) {
-            // 某些旧 iOS 可能对 artwork 尺寸挑剔，失败时用最小配置重试
+            const fallbackArtwork = getArtworkList(DEFAULT_COVER_URL);
             try {
-                navigator.mediaSession.metadata = new MediaMetadata({ title, artist });
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title,
+                    artist,
+                    album: song.album || '',
+                    artwork: fallbackArtwork,
+                });
             } catch (_) {}
         }
     }
@@ -1892,7 +2023,7 @@ function attemptPaletteApplication() {
 function showAlbumCoverPlaceholder() {
     dom.albumCover.innerHTML = PLACEHOLDER_HTML;
     dom.albumCover.classList.remove("loading");
-    state.currentArtworkUrl = toAbsoluteUrl('/favicon.png');
+    state.currentArtworkUrl = toAbsoluteUrl(DEFAULT_COVER_URL);
     queueDefaultPalette();
     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
         window.__SOLARA_UPDATE_MEDIA_METADATA();
@@ -1902,6 +2033,9 @@ function showAlbumCoverPlaceholder() {
 function setAlbumCoverImage(url) {
     const safeUrl = toAbsoluteUrl(preferHttpsUrl(url));
     state.currentArtworkUrl = safeUrl;
+    if (state.currentSong) {
+        state.currentSong.coverUrl = safeUrl;
+    }
     dom.albumCover.innerHTML = `<img src="${safeUrl}" alt="专辑封面">`;
     dom.albumCover.classList.remove("loading");
     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
@@ -3685,6 +3819,7 @@ function setupInteractions() {
 // 修复：更新当前歌曲信息和封面
 function updateCurrentSongInfo(song, options = {}) {
     const { loadArtwork = true } = options;
+    song = withCoverUrl(song);
     state.currentSong = song;
     dom.currentSongTitle.textContent = song.name;
     updateMobileToolbarTitle();
@@ -3704,12 +3839,16 @@ function updateCurrentSongInfo(song, options = {}) {
     }
 
     // 加载封面
-    if (song.pic_id) {
+    const artworkLookupId = getArtworkLookupId(song);
+    if (artworkLookupId) {
         cancelDeferredPaletteUpdate();
         dom.albumCover.classList.add("loading");
         const picUrl = API.getPicUrl(song);
+        const picDataPromise = /[?&]types=pic(?:&|$)/.test(picUrl)
+            ? API.fetchJson(picUrl)
+            : Promise.resolve({ url: picUrl, raw_url: picUrl });
 
-        API.fetchJson(picUrl)
+        picDataPromise
             .then(data => {
                 if (!data || !data.url) {
                     throw new Error("封面地址缺失");
@@ -3717,9 +3856,15 @@ function updateCurrentSongInfo(song, options = {}) {
 
                 const img = new Image();
                 const imageUrl = preferHttpsUrl(data.url);
+                const paletteImageUrl = normalizeCoverUrl(data.raw_url || data.coverUrl || data.url) || imageUrl;
                 const absoluteImageUrl = toAbsoluteUrl(imageUrl);
                 if (state.currentSong === song) {
                     state.currentArtworkUrl = absoluteImageUrl;
+                    state.currentSong.coverUrl = absoluteImageUrl;
+                    if (data.raw_url) {
+                        state.currentSong.rawCoverUrl = data.raw_url;
+                    }
+                    console.debug("[Cover] resolved", { song: state.currentSong, coverUrl: absoluteImageUrl, rawCoverUrl: data.raw_url || "" });
                     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
                         window.__SOLARA_UPDATE_MEDIA_METADATA();
                     }
@@ -3730,9 +3875,9 @@ function updateCurrentSongInfo(song, options = {}) {
                         return;
                     }
                     setAlbumCoverImage(imageUrl);
-                    const shouldApplyImmediately = paletteCache.has(imageUrl) ||
-                        (state.currentPaletteImage === imageUrl && state.dynamicPalette);
-                    scheduleDeferredPaletteUpdate(imageUrl, { immediate: shouldApplyImmediately });
+                    const shouldApplyImmediately = paletteCache.has(paletteImageUrl) ||
+                        (state.currentPaletteImage === paletteImageUrl && state.dynamicPalette);
+                    scheduleDeferredPaletteUpdate(paletteImageUrl, { immediate: shouldApplyImmediately });
                 };
                 img.onerror = () => {
                     if (state.currentSong !== song) {
@@ -5879,7 +6024,7 @@ async function exploreOnlineMusic() {
             return;
         }
 
-        const normalizedSongs = results.map((song) => ({
+        const normalizedSongs = results.map((song) => withCoverUrl({
             id: song.id,
             name: song.name,
             artist: Array.isArray(song.artist) ? song.artist.join(" / ") : (song.artist || "未知艺术家"),
@@ -5887,6 +6032,7 @@ async function exploreOnlineMusic() {
             source: song.source || source,
             lyric_id: song.lyric_id || song.id,
             pic_id: song.pic_id || song.pic || "",
+            coverUrl: song.coverUrl || song.pic_url || song.picUrl || song.cover || song.image || "",
             url_id: song.url_id,
             api_path: song.api_path,
             j8y_api_path: song.j8y_api_path,

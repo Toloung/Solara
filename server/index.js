@@ -20,6 +20,7 @@ const path        = require('path');
 
 const createAuthMiddleware  = require('./routes/auth');
 const createLoginRouter     = require('./routes/login');
+const createCoverRouter     = require('./routes/cover');
 const createStorageRouter   = require('./routes/storage');
 const createProxyRouter     = require('./routes/proxy');
 const createPaletteRouter   = require('./routes/palette');
@@ -40,6 +41,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // POST /api/login（登录接口，不需要认证）
 app.use('/api/login', createLoginRouter(PASSWORD));
+app.use('/api/cover', createCoverRouter());
 
 // GET /login → 提供 login.html
 app.get('/login', (req, res) => {

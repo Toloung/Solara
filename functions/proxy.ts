@@ -3,7 +3,17 @@ const DEFAULT_J8Y_API_BASE = "https://api.j8y.cn/api/gateway.php";
 const DEFAULT_J8Y_API_PATHS = ["wy_music", "znnu_music"];
 const DEFAULT_J8Y_LEVEL = "standard";
 const KUWO_HOST_PATTERN = /(^|\.)kuwo\.cn$/i;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const SAFE_RESPONSE_HEADERS = ["content-type", "cache-control", "accept-ranges", "content-length", "content-range", "etag", "last-modified", "expires"];
+const IMAGE_EXT_CONTENT_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".bmp": "image/bmp",
+  ".avif": "image/avif",
+};
 const AUDIO_URL_FIELDS = ["url", "play_url", "playUrl", "music_url", "musicUrl", "src"];
 const SONG_NAME_FIELDS = ["name", "title", "songName"];
 const ARTIST_FIELDS = ["artist", "author", "artists", "ar", "singer"];
@@ -149,6 +159,14 @@ function normalizeCoverValue(value: any): string {
   return String(value);
 }
 
+function buildProxiedImageUrl(imageUrl: string): string {
+  if (!imageUrl) return "";
+  const params = new URLSearchParams({
+    url: imageUrl,
+  });
+  return `/api/cover?${params.toString()}`;
+}
+
 function normalizeJ8ySong(item: any, apiPath: string): any | null {
   const id = getFirstValue(item, SONG_ID_FIELDS);
   const name = getFirstValue(item, SONG_NAME_FIELDS);
@@ -164,6 +182,7 @@ function normalizeJ8ySong(item: any, apiPath: string): any | null {
     album: getAlbumName(item),
     pic_id: cover || String(id),
     pic_url: cover,
+    coverUrl: cover,
     url_id: String(id),
     lyric_id: String(id),
     source: "j8y",
@@ -325,7 +344,7 @@ async function resolveJ8yPicUrl(url: URL, config: any, request: Request): Promis
   const id = url.searchParams.get("id") || url.searchParams.get("pic_id") || "";
   if (!id) return { status: 200, body: JSON.stringify({ url: "" }) };
   if (/^https?:\/\//i.test(id)) {
-    return { status: 200, body: JSON.stringify({ url: id, source: "j8y" }) };
+    return { status: 200, body: JSON.stringify({ url: buildProxiedImageUrl(id), raw_url: id, source: "j8y" }) };
   }
 
   for (const apiPath of getCandidateApiPaths(url, config)) {
@@ -339,7 +358,13 @@ async function resolveJ8yPicUrl(url: URL, config: any, request: Request): Promis
       if (imageUrl) {
         return {
           status: 200,
-          body: JSON.stringify({ url: imageUrl, source: "j8y", api_path: apiPath, j8y_api_path: apiPath }),
+          body: JSON.stringify({
+            url: buildProxiedImageUrl(imageUrl),
+            raw_url: imageUrl,
+            source: "j8y",
+            api_path: apiPath,
+            j8y_api_path: apiPath,
+          }),
         };
       }
     } catch {
@@ -481,6 +506,73 @@ async function proxyKuwoAudio(targetUrl: string, request: Request): Promise<Resp
   });
 }
 
+function pathExtnameSafe(pathname: string): string {
+  const lastSlash = pathname.lastIndexOf("/");
+  const filename = lastSlash >= 0 ? pathname.slice(lastSlash + 1) : pathname;
+  const lastDot = filename.lastIndexOf(".");
+  return lastDot === -1 ? "" : filename.slice(lastDot).toLowerCase();
+}
+
+function getImageContentType(target: URL, upstreamContentType: string | null): string {
+  const contentType = (upstreamContentType || "").split(";")[0].trim().toLowerCase();
+  if (contentType === "image/jpg") return "image/jpeg";
+  if (contentType.startsWith("image/")) return upstreamContentType || contentType;
+  return IMAGE_EXT_CONTENT_TYPES[pathExtnameSafe(target.pathname)] || "";
+}
+
+async function proxyRemoteImage(targetUrl: string, request: Request): Promise<Response> {
+  let target: URL;
+  try {
+    target = new URL(targetUrl || "");
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid image URL" }), { status: 400, headers: createCorsHeaders() });
+  }
+
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    return new Response(JSON.stringify({ error: "Invalid image URL" }), { status: 400, headers: createCorsHeaders() });
+  }
+
+  try {
+    const upstream = await fetch(target.toString(), {
+      headers: {
+        "User-Agent": request.headers.get("User-Agent") ?? "Mozilla/5.0",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Referer": `${target.protocol}//${target.host}/`,
+      },
+    });
+
+    if (!upstream.ok) {
+      return new Response(JSON.stringify({ error: `Image request failed with status ${upstream.status}` }), {
+        status: upstream.status,
+        headers: createCorsHeaders(),
+      });
+    }
+
+    const contentLength = Number(upstream.headers.get("content-length") || 0);
+    if (contentLength > MAX_IMAGE_BYTES) {
+      return new Response(JSON.stringify({ error: "Image too large" }), { status: 413, headers: createCorsHeaders() });
+    }
+
+    const contentType = getImageContentType(target, upstream.headers.get("content-type"));
+    if (!contentType) {
+      return new Response(JSON.stringify({ error: "Unsupported image type" }), { status: 415, headers: createCorsHeaders() });
+    }
+
+    const buffer = await upstream.arrayBuffer();
+    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+      return new Response(JSON.stringify({ error: "Image too large" }), { status: 413, headers: createCorsHeaders() });
+    }
+
+    const headers = createCorsHeaders();
+    headers.set("Content-Type", contentType);
+    headers.set("Content-Length", String(buffer.byteLength));
+    headers.set("Cache-Control", "public, max-age=86400");
+    return new Response(buffer, { status: 200, headers });
+  } catch {
+    return new Response(JSON.stringify({ error: "Failed to fetch image" }), { status: 502, headers: createCorsHeaders() });
+  }
+}
+
 async function proxyApiRequest(url: URL, request: Request, waitUntil?: (promise: Promise<any>) => void, apiBaseUrl: string = DEFAULT_API_BASE_URL, env?: any): Promise<Response> {
   const cache = (caches as CacheStorage & { default: Cache }).default;
   
@@ -603,6 +695,11 @@ export async function onRequest({ request, waitUntil, env }: { request: Request,
 
   const url = new URL(request.url);
   const target = url.searchParams.get("target");
+  const type = url.searchParams.get("types");
+
+  if (type === "pic-image") {
+    return proxyRemoteImage(target || url.searchParams.get("url") || "", request);
+  }
 
   if (target) {
     return proxyKuwoAudio(target, request);
