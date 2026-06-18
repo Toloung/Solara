@@ -408,44 +408,6 @@ body.mobile-view .current-song-artist {
     color: rgba(255, 255, 255, 0.7);
 }
 
-body.mobile-view .mobile-quality-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 18px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.92);
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    margin: 8px auto 0;
-    cursor: pointer;
-    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.2s ease;
-}
-
-body.mobile-view .mobile-quality-chip i {
-    font-size: 0.75rem;
-    opacity: 0.85;
-}
-
-body.mobile-view .mobile-quality-chip:focus-visible,
-body.mobile-view .mobile-quality-chip:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.32);
-    color: #ffffff;
-}
-
-body.mobile-view .mobile-quality-chip.active {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
-    border-color: transparent;
-    color: #081225;
-    transform: translateY(-1px);
-    box-shadow: 0 14px 32px rgba(var(--accent-color-rgb), 0.35);
-}
-
 body.mobile-view .controls {
     display: flex;
     flex-direction: column;
@@ -464,10 +426,6 @@ body.mobile-view .controls {
     grid-template-areas: unset;
     backdrop-filter: blur(22px) saturate(1.22);
     -webkit-backdrop-filter: blur(22px) saturate(1.22);
-}
-
-body.mobile-view #loadOnlineBtn {
-    display: none;
 }
 
 body.mobile-view .progress-container {
@@ -568,24 +526,6 @@ body.mobile-view .audio-tools {
 
 body.mobile-view .control-trailing {
     display: none;
-}
-
-body.mobile-view .player-quality {
-    flex-shrink: 0;
-}
-
-body.mobile-view .player-quality-btn {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    border: none;
-    border-radius: 14px;
-    padding: 8px 12px;
-    font-size: 0.85rem;
-}
-
-body.mobile-view .player-quality-menu {
-    z-index: 5000;
-    pointer-events: auto;
 }
 
 body.mobile-view .volume-container {

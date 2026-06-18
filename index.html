@@ -107,9 +107,7 @@
     </div>
     <div class="container" id="mainContainer">
         <div class="mobile-toolbar" id="mobileToolbar" role="toolbar">
-            <button class="mobile-toolbar__button" id="mobileExploreButton" type="button" aria-label="探索雷达">
-                <i class="fas fa-satellite-dish" aria-hidden="true"></i>
-            </button>
+            <div class="mobile-toolbar__spacer" aria-hidden="true"></div>
             <div class="mobile-toolbar__title" id="mobileToolbarTitle">Music</div>
             <div class="mobile-toolbar__actions">
                 <button class="mobile-toolbar__button" id="mobileSearchToggle" type="button" aria-label="打开搜索">
@@ -123,11 +121,6 @@
                 <button id="themeToggleButton" class="theme-toggle-button" type="button" aria-label="切换深浅色模式">
                     <i class="fas fa-sun theme-icon theme-icon--sun" aria-hidden="true"></i>
                     <i class="fas fa-moon theme-icon theme-icon--moon" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div class="theme-switch-wrapper">
-                <button id="openSettingsBtn" class="theme-toggle-button" type="button" aria-label="设置" title="设置（或双击Logo）">
-                    <i class="fas fa-cog" aria-hidden="true"></i>
                 </button>
             </div>
         </div>
@@ -204,10 +197,6 @@
                         </button>
                     </div>
                     <div class="current-song-artist" id="currentSongArtist">未知艺术家</div>
-                    <button class="mobile-quality-chip" id="mobileQualityToggle" type="button" aria-haspopup="menu" aria-expanded="false">
-                        <span id="mobileQualityLabel">极高音质</span>
-                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                    </button>
                 </div>
             </div>
 
@@ -475,21 +464,11 @@
             </div>
             <div class="control-trailing">
                 <div class="audio-tools">
-                    <div class="player-quality">
-                        <button id="qualityToggle" class="player-quality-btn" type="button">
-                            <span id="qualityLabel">极高音质</span>
-                        </button>
-                        <div id="playerQualityMenu" class="player-quality-menu"></div>
-                    </div>
                     <div class="volume-container">
                         <i id="volumeIcon" class="fas fa-volume-up"></i>
                         <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.8">
                     </div>
                 </div>
-                <button id="loadOnlineBtn" title="聚合所有雷达，探索新音乐">
-                    <span class="btn-text"><i class="fas fa-satellite-dish"></i> 探索雷达</span>
-                    <span class="loader" style="display: none;"></span>
-                </button>
             </div>
         </div>
     </div>
@@ -497,30 +476,6 @@
     <div class="mobile-overlay-scrim" id="mobileOverlayScrim"></div>
 
     <audio id="audioPlayer" preload="metadata" playsinline></audio>
-
-<!-- 设置模态框 -->
-<div id="settingsModal" class="modal-overlay" aria-hidden="true">
-    <div class="modal-content settings-content">
-        <div class="modal-header">
-            <h2>设置</h2>
-            <button id="closeSettingsBtn" class="close-modal-btn" aria-label="关闭设置">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <section class="settings-section">
-                <h3>探索雷达风格</h3>
-                <p class="settings-hint">选择您喜欢的音乐风格，探索雷达将从中为您推荐歌曲。</p>
-                <div id="radarGenreList" class="genre-grid">
-                    <!-- 风格复选框将通过 JS 动态生成 -->
-                </div>
-            </section>
-        </div>
-        <div class="modal-footer">
-            <button id="saveSettingsBtn" class="save-settings-btn">保存设置</button>
-        </div>
-    </div>
-</div>
 
 <!-- 通知容器 -->
 <div id="notification" class="notification"></div>

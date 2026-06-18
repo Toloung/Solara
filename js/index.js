@@ -1964,7 +1964,7 @@ function queuePaletteApplication(palette, imageUrl, options = {}) {
     pendingPaletteTimer = null;
     state.pendingPaletteData = palette || null;
     state.pendingPaletteImage = imageUrl || null;
-    state.pendingPaletteImmediate = Boolean(options.immediate);
+    state.pendingPaletteImmediate = options.immediate !== false;
     state.pendingPaletteReady = true;
     attemptPaletteApplication();
 }
@@ -2028,7 +2028,7 @@ function scheduleDeferredPaletteUpdate(imageUrl, options = {}) {
 }
 
 function attemptPaletteApplication() {
-    if (!state.pendingPaletteReady || !state.audioReadyForPalette) {
+    if (!state.pendingPaletteReady) {
         return;
     }
 
@@ -2409,7 +2409,7 @@ async function updateDynamicBackground(imageUrl) {
         if (requestId !== paletteRequestId) {
             return;
         }
-        queuePaletteApplication(palette, imageUrl);
+        queuePaletteApplication(palette, imageUrl, { immediate: true });
         debugLog("[后端解析] 动态背景提取成功");
         console.log(`[Palette BACKEND] Successfully extracted colors using Backend API: ${imageUrl}`);
     } catch (error) {
@@ -2435,7 +2435,7 @@ async function updateDynamicBackground(imageUrl) {
             paletteCache.set(imageUrl, clientPalette);
             persistPaletteCache();
 
-            queuePaletteApplication(clientPalette, imageUrl);
+            queuePaletteApplication(clientPalette, imageUrl, { immediate: true });
             debugLog("[前端降级] 动态背景提取成功");
             console.log(`[Palette FRONTEND] Successfully extracted colors using Frontend Canvas API: ${imageUrl}`);
         } catch (fallbackError) {
@@ -3020,8 +3020,12 @@ function getQualityMenuAnchor() {
 function updateQualityLabel() {
     const option = QUALITY_OPTIONS.find(item => item.value === state.playbackQuality) || QUALITY_OPTIONS[0];
     if (!option) return;
-    dom.qualityLabel.textContent = option.label;
-    dom.qualityToggle.title = `音质: ${option.label} (${option.description})`;
+    if (dom.qualityLabel) {
+        dom.qualityLabel.textContent = option.label;
+    }
+    if (dom.qualityToggle) {
+        dom.qualityToggle.title = `音质: ${option.label} (${option.description})`;
+    }
     if (dom.mobileQualityLabel) {
         dom.mobileQualityLabel.textContent = option.label;
     }
@@ -3524,15 +3528,21 @@ function setupInteractions() {
 
     dom.volumeSlider.addEventListener("input", handleVolumeChange);
 
-    dom.qualityToggle.addEventListener("click", togglePlayerQualityMenu);
+    if (dom.qualityToggle) {
+        dom.qualityToggle.addEventListener("click", togglePlayerQualityMenu);
+    }
     if (dom.mobileQualityToggle) {
         dom.mobileQualityToggle.addEventListener("click", togglePlayerQualityMenu);
     }
-    setQualityAnchorState(dom.qualityToggle, false);
+    if (dom.qualityToggle) {
+        setQualityAnchorState(dom.qualityToggle, false);
+    }
     if (dom.mobileQualityToggle) {
         setQualityAnchorState(dom.mobileQualityToggle, false);
     }
-    dom.playerQualityMenu.addEventListener("click", handlePlayerQualitySelection);
+    if (dom.playerQualityMenu) {
+        dom.playerQualityMenu.addEventListener("click", handlePlayerQualitySelection);
+    }
 
     if (isMobileView && dom.albumCover) {
         dom.albumCover.addEventListener("click", () => {
@@ -3551,7 +3561,9 @@ function setupInteractions() {
         });
     }
 
-    dom.loadOnlineBtn.addEventListener("click", exploreOnlineMusic);
+    if (dom.loadOnlineBtn) {
+        dom.loadOnlineBtn.addEventListener("click", exploreOnlineMusic);
+    }
     if (dom.mobileExploreButton) {
         dom.mobileExploreButton.addEventListener("click", (event) => {
             event.preventDefault();
@@ -5602,14 +5614,15 @@ async function playSong(song, options = {}) {
     const { autoplay = true, startTime = 0, preserveProgress = false, isRetry = false } = options;
 
     window.clearTimeout(pendingPaletteTimer);
-    state.audioReadyForPalette = false;
+    state.audioReadyForPalette = true;
     state.pendingPaletteData = null;
     state.pendingPaletteImage = null;
     state.pendingPaletteImmediate = false;
     state.pendingPaletteReady = false;
 
     try {
-        updateCurrentSongInfo(song, { loadArtwork: false });
+        updateCurrentSongInfo(song, { loadArtwork: true });
+        loadLyrics(song);
 
         const quality = state.playbackQuality || '320';
         let audioUrl = API.getSongUrl(song, quality);
@@ -5734,8 +5747,6 @@ async function playSong(song, options = {}) {
             dom.audioPlayer.pause();
             updatePlayPauseButton();
         }
-
-        scheduleDeferredSongAssets(song, playPromise);
 
         debugLog(`开始播放: ${song.name} @${quality}`);
 

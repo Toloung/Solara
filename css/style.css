@@ -179,18 +179,6 @@ body.background-transitioning .background-stage__layer--transition {
 }
 
 /* 设置按钮齿轮动画及大小 */
-#openSettingsBtn i {
-    font-size: 19px;
-}
-#openSettingsBtn:hover i {
-    animation: gear-spin 0.6s linear;
-}
-
-@keyframes gear-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(180deg); }
-}
-
 /* 搜索区域样式 - 增强动效 */
 .search-area {
     grid-area: search;
@@ -1202,7 +1190,7 @@ html.mobile-view .playlist-header .playlist-action-btn {
 
 /* 播放列表空状态的提示文本 */
 .playlist.empty .playlist-scroll::before {
-    content: "点击\"探索雷达\"加载在线音乐";
+    content: "点击搜索按钮添加在线音乐";
     color: var(--text-secondary-color);
     font-style: italic;
     opacity: 0.7;
@@ -1210,7 +1198,7 @@ html.mobile-view .playlist-header .playlist-action-btn {
 }
 
 html[lang="en"] .playlist.empty .playlist-scroll::before {
-    content: 'Click "Explore Radar" to load online music';
+    content: "Use search to add music";
 }
 
 .playlist.favorites.empty::before {
@@ -1742,26 +1730,6 @@ html[lang="en"] .lyrics.empty[data-placeholder="default"] .lyrics-scroll::before
     transform: translateY(0); 
     box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
 }
-.controls button#loadOnlineBtn {
-    width: auto;
-    border-radius: 25px;
-    padding: 0 25px;
-    gap: 10px;
-}
-.controls button#loadOnlineBtn .btn-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    line-height: 1;
-}
-.controls button#loadOnlineBtn .btn-text i {
-    line-height: 1;
-}
-.controls button#loadOnlineBtn .loader {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
 .controls button:disabled { 
     background: var(--text-secondary-color); 
     cursor: not-allowed; 
@@ -1875,10 +1843,6 @@ html:not(.mobile-view) #playModeBtn {
     flex: 1 1 auto;
 }
 
-.control-trailing #loadOnlineBtn {
-    margin-left: auto;
-}
-
 .volume-container {
     display: flex;
     align-items: center;
@@ -1925,90 +1889,6 @@ input[type="range"]:active::-moz-range-thumb {
     transform: scale(1.1);
 }
 
-.player-quality {
-    position: relative;
-}
-
-.controls .player-quality-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 10px 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background: var(--component-bg);
-    color: var(--text-color);
-    font-size: 0.9em;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    width: auto;
-    height: auto;
-    box-shadow: none;
-}
-
-.controls .player-quality-btn:hover,
-.controls .player-quality-btn.active {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-    box-shadow: 0 6px 16px rgba(var(--accent-color-rgb), 0.25);
-    background: var(--component-bg);
-}
-
-.player-quality-menu {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.2);
-    border: 1px solid var(--border-color);
-    min-width: 180px;
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.2s ease;
-    z-index: 100000;
-    pointer-events: none;
-}
-
-.dark-mode .player-quality-menu {
-    background: #1c1c1c;
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6);
-}
-
-.player-quality-menu.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-    pointer-events: auto;
-}
-
-.player-quality-menu.floating {
-    position: fixed;
-    right: auto;
-    left: 0;
-    top: 0;
-    will-change: opacity, transform;
-}
-
-.player-quality-menu.floating:not(.show) {
-    opacity: 0;
-    visibility: hidden;
-}
-
-.player-quality-menu.open-upwards {
-    transform-origin: bottom center;
-}
-
-.player-quality-menu.open-downwards {
-    transform-origin: top center;
-}
-
-.player-quality-option,
 .quality-option {
     display: flex;
     justify-content: space-between;
@@ -2022,15 +1902,12 @@ input[type="range"]:active::-moz-range-thumb {
     background: transparent;
 }
 
-.player-quality-option:hover,
-.player-quality-option.active,
 .quality-option:hover,
 .quality-option.active {
     background: var(--primary-color);
     color: white;
 }
 
-.player-quality-option small,
 .quality-option small {
     opacity: 0.7;
 }
