@@ -167,7 +167,7 @@ function normalizeSong(item, apiPath) {
     name: String(name),
     artist: normalizeArtist(artist) || 'Unknown artist',
     album: getAlbumName(item),
-    pic_id: cover,
+    pic_id: cover || String(id),
     pic_url: cover,
     url_id: String(id),
     lyric_id: String(id),
