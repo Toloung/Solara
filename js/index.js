@@ -348,11 +348,15 @@ const themeDefaults = {
         gradient: "",
         primaryColor: "",
         primaryColorDark: "",
+        accentColor: "",
+        accentColorRgb: "",
     },
     dark: {
         gradient: "",
         primaryColor: "",
         primaryColorDark: "",
+        accentColor: "",
+        accentColorRgb: "",
     }
 };
 let paletteRequestId = 0;
@@ -1755,21 +1759,29 @@ function captureThemeDefaults() {
     const oldBg = document.documentElement.style.getPropertyValue("--bg-gradient");
     const oldPrimary = document.documentElement.style.getPropertyValue("--primary-color");
     const oldPrimaryDark = document.documentElement.style.getPropertyValue("--primary-color-dark");
+    const oldAccent = document.documentElement.style.getPropertyValue("--accent-color");
+    const oldAccentRgb = document.documentElement.style.getPropertyValue("--accent-color-rgb");
     
     document.documentElement.style.removeProperty("--bg-gradient");
     document.documentElement.style.removeProperty("--primary-color");
     document.documentElement.style.removeProperty("--primary-color-dark");
+    document.documentElement.style.removeProperty("--accent-color");
+    document.documentElement.style.removeProperty("--accent-color-rgb");
 
     const lightStyles = getComputedStyle(document.body);
     themeDefaults.light.gradient = lightStyles.getPropertyValue("--bg-gradient").trim();
     themeDefaults.light.primaryColor = lightStyles.getPropertyValue("--primary-color").trim();
     themeDefaults.light.primaryColorDark = lightStyles.getPropertyValue("--primary-color-dark").trim();
+    themeDefaults.light.accentColor = lightStyles.getPropertyValue("--accent-color").trim();
+    themeDefaults.light.accentColorRgb = lightStyles.getPropertyValue("--accent-color-rgb").trim();
 
     document.body.classList.add("dark-mode");
     const darkStyles = getComputedStyle(document.body);
     themeDefaults.dark.gradient = darkStyles.getPropertyValue("--bg-gradient").trim();
     themeDefaults.dark.primaryColor = darkStyles.getPropertyValue("--primary-color").trim();
     themeDefaults.dark.primaryColorDark = darkStyles.getPropertyValue("--primary-color-dark").trim();
+    themeDefaults.dark.accentColor = darkStyles.getPropertyValue("--accent-color").trim();
+    themeDefaults.dark.accentColorRgb = darkStyles.getPropertyValue("--accent-color-rgb").trim();
 
     if (!initialIsDark) {
         document.body.classList.remove("dark-mode");
@@ -1778,14 +1790,41 @@ function captureThemeDefaults() {
     if (oldBg) document.documentElement.style.setProperty("--bg-gradient", oldBg);
     if (oldPrimary) document.documentElement.style.setProperty("--primary-color", oldPrimary);
     if (oldPrimaryDark) document.documentElement.style.setProperty("--primary-color-dark", oldPrimaryDark);
+    if (oldAccent) document.documentElement.style.setProperty("--accent-color", oldAccent);
+    if (oldAccentRgb) document.documentElement.style.setProperty("--accent-color-rgb", oldAccentRgb);
 
     state.themeDefaultsCaptured = true;
+}
+
+function colorToRgbString(color) {
+    if (typeof color !== "string") {
+        return "";
+    }
+    const normalized = color.trim();
+    const hexMatch = normalized.match(/^#?([a-f\d]{3}|[a-f\d]{6})$/i);
+    if (!hexMatch) {
+        return "";
+    }
+    let hex = hexMatch[1];
+    if (hex.length === 3) {
+        hex = hex.split("").map(ch => ch + ch).join("");
+    }
+    const value = Number.parseInt(hex, 16);
+    if (!Number.isFinite(value)) {
+        return "";
+    }
+    return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
 }
 
 function applyThemeTokens(tokens) {
     if (!tokens) return;
     if (tokens.primaryColor) {
         setGlobalThemeProperty("--primary-color", tokens.primaryColor);
+        setGlobalThemeProperty("--accent-color", tokens.accentColor || tokens.primaryColor);
+        const rgb = tokens.accentColorRgb || colorToRgbString(tokens.accentColor || tokens.primaryColor);
+        if (rgb) {
+            setGlobalThemeProperty("--accent-color-rgb", rgb);
+        }
     }
     if (tokens.primaryColorDark) {
         setGlobalThemeProperty("--primary-color-dark", tokens.primaryColorDark);
@@ -2024,6 +2063,7 @@ function showAlbumCoverPlaceholder() {
     dom.albumCover.innerHTML = PLACEHOLDER_HTML;
     dom.albumCover.classList.remove("loading");
     state.currentArtworkUrl = toAbsoluteUrl(DEFAULT_COVER_URL);
+    setGlobalThemeProperty("--mobile-cover-image", `url("${state.currentArtworkUrl}")`);
     queueDefaultPalette();
     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
         window.__SOLARA_UPDATE_MEDIA_METADATA();
@@ -2036,6 +2076,7 @@ function setAlbumCoverImage(url) {
     if (state.currentSong) {
         state.currentSong.coverUrl = safeUrl;
     }
+    setGlobalThemeProperty("--mobile-cover-image", `url("${safeUrl}")`);
     dom.albumCover.innerHTML = `<img src="${safeUrl}" alt="专辑封面">`;
     dom.albumCover.classList.remove("loading");
     if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
