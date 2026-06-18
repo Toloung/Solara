@@ -32,6 +32,14 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
+function applyForwardedProto(request: Request, url: URL): URL {
+  const forwardedProto = request.headers.get("X-Forwarded-Proto")?.split(",")[0]?.trim();
+  if (forwardedProto === "http" || forwardedProto === "https") {
+    url.protocol = `${forwardedProto}:`;
+  }
+  return url;
+}
+
 async function authMiddleware(context: any) {
   const { request, env } = context;
   const password = env.PASSWORD;
@@ -40,7 +48,7 @@ async function authMiddleware(context: any) {
     return context.next();
   }
 
-  const url = new URL(request.url);
+  const url = applyForwardedProto(request, new URL(request.url));
   const pathname = url.pathname;
   if (isPublicPath(pathname)) {
     return context.next();

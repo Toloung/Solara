@@ -10,6 +10,7 @@
 
 const { Router } = require('express');
 const cache = require('../cache');
+const { handleJ8yProxyRequest } = require('../music-providers/j8y');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://music-api.gdstudio.xyz/api.php';
 const KUWO_HOST_PATTERN = /(^|\.)kuwo\.cn$/i;
@@ -78,6 +79,7 @@ async function proxyApiRequest(reqUrl, req, res) {
   const cacheKey = buildCacheKey(reqUrl);
   const parsedReq = new URL(reqUrl);
   const bypassCache = parsedReq.searchParams.get('nocache') === 'true';
+  const provider = (process.env.MUSIC_API_PROVIDER || 'default').toLowerCase();
 
   // ── Cache HIT ──────────────────────────────────────────────────────────────
   if (!bypassCache) {
@@ -95,38 +97,55 @@ async function proxyApiRequest(reqUrl, req, res) {
   // ── Cache MISS：请求上游 ────────────────────────────────────────────────────
   console.log(`[Cache MISS] Fetching from upstream: ${reqUrl}`);
 
-  const apiUrl = new URL(API_BASE_URL);
-  parsedReq.searchParams.forEach((value, key) => {
-    if (key === 'target' || key === 'callback' || key === 's' || key === 'nocache') return;
-    apiUrl.searchParams.set(key, value);
-  });
+  let responseText;
+  let contentType = 'application/json; charset=utf-8';
+  let status = 200;
 
-  if (!apiUrl.searchParams.has('types')) {
-    return res.status(400).send('Missing types');
-  }
-
-  let upstream;
-  try {
-    upstream = await fetch(apiUrl.toString(), {
-      headers: {
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-        'Accept': 'application/json',
-      },
+  if (provider === 'j8y') {
+    try {
+      const providerResponse = await handleJ8yProxyRequest(parsedReq, req);
+      responseText = providerResponse.body;
+      contentType = providerResponse.contentType || contentType;
+      status = providerResponse.status || 200;
+    } catch (err) {
+      console.error('[Proxy j8y fetch]', err);
+      return res.status(502).send('Upstream error');
+    }
+  } else {
+    const apiUrl = new URL(API_BASE_URL);
+    parsedReq.searchParams.forEach((value, key) => {
+      if (key === 'target' || key === 'callback' || key === 's' || key === 'nocache') return;
+      apiUrl.searchParams.set(key, value);
     });
-  } catch (err) {
-    console.error('[Proxy API fetch]', err);
-    return res.status(502).send('Upstream error');
-  }
 
-  const responseText = await upstream.text();
-  const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
+    if (!apiUrl.searchParams.has('types')) {
+      return res.status(400).send('Missing types');
+    }
+
+    let upstream;
+    try {
+      upstream = await fetch(apiUrl.toString(), {
+        headers: {
+          'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
+          'Accept': 'application/json',
+        },
+      });
+    } catch (err) {
+      console.error('[Proxy API fetch]', err);
+      return res.status(502).send('Upstream error');
+    }
+
+    responseText = await upstream.text();
+    contentType = upstream.headers.get('content-type') || contentType;
+    status = upstream.status;
+  }
 
   // ── 判断是否缓存（与 Cloudflare 版本逻辑完全一致）──────────────────────────
   const isSearch = parsedReq.searchParams.get('types') === 'search';
   const isEmptyResult = responseText.trim() === '[]';
   const isError = responseText.includes('"error"') || responseText.includes('"status":0');
 
-  let shouldCache = upstream.status === 200 && !isError && !bypassCache;
+  let shouldCache = status === 200 && !isError && !bypassCache;
   if (isSearch && isEmptyResult) shouldCache = false;
 
   if (shouldCache) {
@@ -140,7 +159,7 @@ async function proxyApiRequest(reqUrl, req, res) {
   res.setHeader('Access-Control-Expose-Headers', 'X-Cache-Status');
   res.setHeader('Cache-Control', shouldCache ? 'public, max-age=300' : 'no-store');
 
-  return res.status(upstream.status).send(responseText);
+  return res.status(status).send(responseText);
 }
 
 module.exports = function createProxyRouter() {

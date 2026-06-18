@@ -20,9 +20,6 @@ const dom = {
     showLyricsBtn: document.getElementById("showLyricsBtn"),
     searchInput: document.getElementById("searchInput"),
     searchBtn: document.getElementById("searchBtn"),
-    sourceSelectButton: document.getElementById("sourceSelectButton"),
-    sourceSelectLabel: document.getElementById("sourceSelectLabel"),
-    sourceMenu: document.getElementById("sourceMenu"),
     searchResults: document.getElementById("searchResults"),
     searchResultsList: document.getElementById("searchResultsList"),
     notification: document.getElementById("notification"),
@@ -647,16 +644,11 @@ function buildAudioProxyUrl(url) {
     }
 }
 
-const SOURCE_OPTIONS = [
-    { value: "netease", label: "网易云音乐" },
-    { value: "kuwo", label: "酷我音乐" },
-    { value: "joox", label: "JOOX音乐" },
-    { value: "bilibili", label: "哔哩哔哩" }
-];
+const DEFAULT_SEARCH_SOURCE = "netease";
+const SOURCE_OPTIONS = [{ value: DEFAULT_SEARCH_SOURCE }];
 
 function normalizeSource(value) {
-    const allowed = SOURCE_OPTIONS.map(option => option.value);
-    return allowed.includes(value) ? value : SOURCE_OPTIONS[0].value;
+    return value === DEFAULT_SEARCH_SOURCE ? value : DEFAULT_SEARCH_SOURCE;
 }
 
 const QUALITY_OPTIONS = [
@@ -832,6 +824,8 @@ const API = {
                 url_id: song.url_id,
                 lyric_id: song.lyric_id,
                 source: song.source,
+                api_path: song.api_path,
+                j8y_api_path: song.j8y_api_path,
             }));
         } catch (error) {
             debugLog(`API错误: ${error.message}`);
@@ -894,16 +888,40 @@ const API = {
 
     getSongUrl: (song, quality = "320") => {
         const signature = API.generateSignature();
-        return `${API.baseUrl}?types=url&id=${song.id}&source=${song.source || "netease"}&br=${quality}&s=${signature}`;
+        const params = new URLSearchParams({
+            types: "url",
+            id: song.id,
+            source: song.source || "netease",
+            br: quality,
+            s: signature,
+        });
+        const apiPath = song.api_path || song.j8y_api_path;
+        if (apiPath) {
+            params.set("api_path", apiPath);
+        }
+        return `${API.baseUrl}?${params.toString()}`;
     },
 
     getLyric: (song) => {
         const signature = API.generateSignature();
-        return `${API.baseUrl}?types=lyric&id=${song.lyric_id || song.id}&source=${song.source || "netease"}&s=${signature}`;
+        const params = new URLSearchParams({
+            types: "lyric",
+            id: song.lyric_id || song.id,
+            source: song.source || "netease",
+            s: signature,
+        });
+        const apiPath = song.api_path || song.j8y_api_path;
+        if (apiPath) {
+            params.set("api_path", apiPath);
+        }
+        return `${API.baseUrl}?${params.toString()}`;
     },
 
     getPicUrl: (song) => {
         const signature = API.generateSignature();
+        if (song.pic_id && /^https?:\/\//i.test(String(song.pic_id))) {
+            return preferHttpsUrl(String(song.pic_id));
+        }
         return `${API.baseUrl}?types=pic&id=${song.pic_id}&source=${song.source || "netease"}&size=300&s=${signature}`;
     }
 };
@@ -944,7 +962,6 @@ const state = {
     pendingSeekTime: null,
     isSeeking: false,
     qualityMenuOpen: false,
-    sourceMenuOpen: false,
     userScrolledLyrics: false, // 新增：用户是否手动滚动歌词
     lyricsScrollTimeout: null, // 新增：歌词滚动超时
     themeDefaultsCaptured: false,
@@ -1154,8 +1171,6 @@ function applyPersistentSnapshotFromRemote(data) {
     if (typeof data.searchSource === "string") {
         state.searchSource = normalizeSource(data.searchSource);
         safeSetLocalStorage("searchSource", state.searchSource, { skipRemote: true });
-        updateSourceLabel();
-        buildSourceMenu();
     }
 
     if (typeof data[LAST_SEARCH_STATE_STORAGE_KEY] === "string") {
@@ -1300,7 +1315,7 @@ bootstrapPersistentStorage();
     function updateMediaMetadata() {
         // 依赖现有全局 state.currentSong；已在项目中使用 localStorage 保存/恢复。:contentReference[oaicite:7]{index=7}
         const song = state.currentSong || {};
-        const title = song.name || dom.currentSongTitle?.textContent || 'Solara';
+        const title = song.name || dom.currentSongTitle?.textContent || 'Music';
         const artist = song.artist || dom.currentSongArtist?.textContent || '';
         const artworkUrl = state.currentArtworkUrl || '';
 
@@ -1484,7 +1499,6 @@ bootstrapPersistentStorage();
     triggerMediaSessionMetadataRefresh();
 })();
 
-let sourceMenuPositionFrame = null;
 let qualityMenuPositionFrame = null;
 let floatingMenuListenersAttached = false;
 let qualityMenuAnchor = null;
@@ -1500,27 +1514,6 @@ function runWithoutTransition(element, callback) {
     } else {
         element.style.removeProperty("transition");
     }
-}
-
-function cancelSourceMenuPositionUpdate() {
-    if (sourceMenuPositionFrame !== null) {
-        window.cancelAnimationFrame(sourceMenuPositionFrame);
-        sourceMenuPositionFrame = null;
-    }
-}
-
-function scheduleSourceMenuPositionUpdate() {
-    if (!state.sourceMenuOpen) {
-        cancelSourceMenuPositionUpdate();
-        return;
-    }
-    if (sourceMenuPositionFrame !== null) {
-        return;
-    }
-    sourceMenuPositionFrame = window.requestAnimationFrame(() => {
-        sourceMenuPositionFrame = null;
-        updateSourceMenuPosition();
-    });
 }
 
 function cancelPlayerQualityMenuPositionUpdate() {
@@ -1545,18 +1538,12 @@ function schedulePlayerQualityMenuPositionUpdate() {
 }
 
 function handleFloatingMenuResize() {
-    if (state.sourceMenuOpen) {
-        scheduleSourceMenuPositionUpdate();
-    }
     if (state.qualityMenuOpen) {
         schedulePlayerQualityMenuPositionUpdate();
     }
 }
 
 function handleFloatingMenuScroll() {
-    if (state.sourceMenuOpen) {
-        scheduleSourceMenuPositionUpdate();
-    }
     if (state.qualityMenuOpen) {
         schedulePlayerQualityMenuPositionUpdate();
     }
@@ -1572,7 +1559,7 @@ function ensureFloatingMenuListeners() {
 }
 
 function releaseFloatingMenuListenersIfIdle() {
-    if (state.sourceMenuOpen || state.qualityMenuOpen) {
+    if (state.qualityMenuOpen) {
         return;
     }
     if (!floatingMenuListenersAttached) {
@@ -2348,9 +2335,6 @@ function toggleSearchMode(enable) {
 function showSearchResults(options = {}) {
     const { restore = false } = options;
     toggleSearchMode(true);
-    if (state.sourceMenuOpen) {
-        scheduleSourceMenuPositionUpdate();
-    }
     if (state.qualityMenuOpen) {
         schedulePlayerQualityMenuPositionUpdate();
     }
@@ -2362,9 +2346,6 @@ function showSearchResults(options = {}) {
 // 新增：隐藏搜索结果 - 优化立即收起
 function hideSearchResults() {
     toggleSearchMode(false);
-    if (state.sourceMenuOpen) {
-        scheduleSourceMenuPositionUpdate();
-    }
     if (state.qualityMenuOpen) {
         schedulePlayerQualityMenuPositionUpdate();
     }
@@ -2411,8 +2392,6 @@ function restoreStateFromSnapshot(snapshot) {
     state.searchResults = cloneSearchResults(sanitized.results);
     lastSearchStateCache = { ...sanitized, results: cloneSearchResults(sanitized.results) };
     safeSetLocalStorage("searchSource", state.searchSource);
-    updateSourceLabel();
-    buildSourceMenu();
     return true;
 }
 
@@ -2793,135 +2772,6 @@ async function togglePlayPause() {
     } else {
         dom.audioPlayer.pause();
     }
-}
-
-function buildSourceMenu() {
-    if (!dom.sourceMenu) return;
-    const optionsHtml = SOURCE_OPTIONS.map(option => {
-        const isActive = option.value === state.searchSource;
-        return `
-            <div class="source-option${isActive ? " active" : ""}" data-source="${option.value}" role="option" aria-selected="${isActive}">
-                <span>${option.label}</span>
-                ${isActive ? '<i class="fas fa-check" aria-hidden="true"></i>' : ""}
-            </div>
-        `;
-    }).join("");
-    dom.sourceMenu.innerHTML = optionsHtml;
-    if (state.sourceMenuOpen) {
-        scheduleSourceMenuPositionUpdate();
-    }
-}
-
-function updateSourceLabel() {
-    const option = SOURCE_OPTIONS.find(item => item.value === state.searchSource) || SOURCE_OPTIONS[0];
-    if (!option || !dom.sourceSelectLabel || !dom.sourceSelectButton) return;
-    dom.sourceSelectLabel.textContent = option.label;
-    dom.sourceSelectButton.dataset.source = option.value;
-    dom.sourceSelectButton.setAttribute("aria-expanded", state.sourceMenuOpen ? "true" : "false");
-    dom.sourceSelectButton.setAttribute("aria-label", `当前音源：${option.label}，点击切换音源`);
-    dom.sourceSelectButton.setAttribute("title", `音源：${option.label}`);
-}
-
-function updateSourceMenuPosition() {
-    if (!state.sourceMenuOpen || !dom.sourceMenu || !dom.sourceSelectButton) return;
-
-    const menu = dom.sourceMenu;
-    const button = dom.sourceSelectButton;
-    const spacing = 10;
-    const buttonWidth = Math.ceil(button.getBoundingClientRect().width);
-    const effectiveWidth = Math.max(buttonWidth, 140);
-
-    menu.style.left = "0px";
-    menu.style.width = `${effectiveWidth}px`;
-    menu.style.minWidth = `${effectiveWidth}px`;
-    menu.style.maxWidth = `${effectiveWidth}px`;
-
-    const menuHeight = Math.max(menu.scrollHeight, 0);
-    const buttonRect = button.getBoundingClientRect();
-    const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
-    const spaceBelow = Math.max(viewportHeight - buttonRect.bottom - spacing, 0);
-    const canOpenUpwards = buttonRect.top - spacing - menuHeight >= 0;
-    const shouldOpenUpwards = menuHeight > spaceBelow && canOpenUpwards;
-
-    if (shouldOpenUpwards) {
-        menu.classList.add("open-upwards");
-        menu.classList.remove("open-downwards");
-        menu.style.top = "";
-        menu.style.bottom = `${button.offsetHeight + spacing}px`;
-    } else {
-        menu.classList.add("open-downwards");
-        menu.classList.remove("open-upwards");
-        menu.style.bottom = "";
-        menu.style.top = `${button.offsetHeight + spacing}px`;
-    }
-}
-
-function resetSourceMenuPosition() {
-    if (!dom.sourceMenu) return;
-    dom.sourceMenu.classList.remove("open-upwards", "open-downwards");
-    dom.sourceMenu.style.top = "";
-    dom.sourceMenu.style.left = "";
-    dom.sourceMenu.style.bottom = "";
-    dom.sourceMenu.style.minWidth = "";
-    dom.sourceMenu.style.maxWidth = "";
-    dom.sourceMenu.style.width = "";
-}
-
-function openSourceMenu() {
-    if (!dom.sourceMenu || !dom.sourceSelectButton) return;
-    state.sourceMenuOpen = true;
-    ensureFloatingMenuListeners();
-    buildSourceMenu();
-    dom.sourceMenu.classList.add("show");
-    dom.sourceSelectButton.classList.add("active");
-    dom.sourceSelectButton.setAttribute("aria-expanded", "true");
-    updateSourceMenuPosition();
-    scheduleSourceMenuPositionUpdate();
-}
-
-function closeSourceMenu() {
-    if (!dom.sourceMenu) return;
-    dom.sourceMenu.classList.remove("show");
-    dom.sourceSelectButton.classList.remove("active");
-    dom.sourceSelectButton.setAttribute("aria-expanded", "false");
-    state.sourceMenuOpen = false;
-    cancelSourceMenuPositionUpdate();
-    resetSourceMenuPosition();
-    releaseFloatingMenuListenersIfIdle();
-}
-
-function toggleSourceMenu(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (state.sourceMenuOpen) {
-        closeSourceMenu();
-    } else {
-        openSourceMenu();
-    }
-}
-
-function handleSourceSelection(event) {
-    const option = event.target.closest(".source-option");
-    if (!option) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const { source } = option.dataset;
-    if (source) {
-        selectSearchSource(source);
-    }
-}
-
-function selectSearchSource(source) {
-    const normalized = normalizeSource(source);
-    if (normalized === state.searchSource) {
-        closeSourceMenu();
-        return;
-    }
-    state.searchSource = normalized;
-    safeSetLocalStorage("searchSource", normalized);
-    updateSourceLabel();
-    buildSourceMenu();
-    closeSourceMenu();
 }
 
 function buildQualityMenu() {
@@ -3455,8 +3305,6 @@ function setupInteractions() {
     updateVolumeSliderBackground(state.volume);
     updateVolumeIcon(state.volume);
 
-    buildSourceMenu();
-    updateSourceLabel();
     buildQualityMenu();
     ensureQualityMenuPortal();
     initializePlaylistEventHandlers();
@@ -3486,10 +3334,6 @@ function setupInteractions() {
 
     dom.volumeSlider.addEventListener("input", handleVolumeChange);
 
-    if (dom.sourceSelectButton && dom.sourceMenu) {
-        dom.sourceSelectButton.addEventListener("click", toggleSourceMenu);
-        dom.sourceMenu.addEventListener("click", handleSourceSelection);
-    }
     dom.qualityToggle.addEventListener("click", togglePlayerQualityMenu);
     if (dom.mobileQualityToggle) {
         dom.mobileQualityToggle.addEventListener("click", togglePlayerQualityMenu);
@@ -3704,9 +3548,6 @@ function setupInteractions() {
     });
 
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && state.sourceMenuOpen) {
-            closeSourceMenu();
-        }
         if (isMobileView && e.key === "Escape") {
             closeAllMobileOverlays();
         }
@@ -3732,14 +3573,6 @@ function setupInteractions() {
                 return;
             }
             closePlayerQualityMenu();
-        }
-
-        if (state.sourceMenuOpen &&
-            dom.sourceMenu &&
-            dom.sourceSelectButton &&
-            !dom.sourceMenu.contains(e.target) &&
-            !dom.sourceSelectButton.contains(e.target)) {
-            closeSourceMenu();
         }
     });
 
@@ -3918,15 +3751,9 @@ async function performSearch(isLiveSearch = false) {
         return;
     }
 
-    if (state.sourceMenuOpen) {
-        closeSourceMenu();
-    }
-
-    const source = normalizeSource(state.searchSource);
+    const source = DEFAULT_SEARCH_SOURCE;
     state.searchSource = source;
     safeSetLocalStorage("searchSource", source);
-    updateSourceLabel();
-    buildSourceMenu();
 
     // 重置搜索状态
     if (!isLiveSearch) {
@@ -4013,7 +3840,7 @@ async function loadMoreResults() {
         state.searchPage++;
         debugLog(`加载第 ${state.searchPage} 页结果`);
 
-        const source = normalizeSource(state.searchSource);
+        const source = DEFAULT_SEARCH_SOURCE;
         state.searchSource = source;
         safeSetLocalStorage("searchSource", source);
         const results = await API.search(state.searchKeyword, source, 20, state.searchPage);
@@ -4707,7 +4534,7 @@ function exportPlaylist() {
     try {
         const payload = {
             meta: {
-                app: "Solara",
+                app: "Music",
                 version: PLAYLIST_EXPORT_VERSION,
                 exportedAt: new Date().toISOString(),
                 itemCount: state.playlistSongs.length
@@ -4721,7 +4548,7 @@ function exportPlaylist() {
         const formattedTimestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `solara-playlist-${formattedTimestamp}.json`;
+        anchor.download = `music-playlist-${formattedTimestamp}.json`;
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
@@ -5334,7 +5161,7 @@ function exportFavorites() {
     try {
         const payload = {
             meta: {
-                app: "Solara",
+                app: "Music",
                 version: FAVORITE_EXPORT_VERSION,
                 exportedAt: new Date().toISOString(),
                 itemCount: favorites.length,
@@ -5349,7 +5176,7 @@ function exportFavorites() {
         const formattedTimestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `solara-favorites-${formattedTimestamp}.json`;
+        anchor.download = `music-favorites-${formattedTimestamp}.json`;
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
@@ -6046,6 +5873,8 @@ async function exploreOnlineMusic() {
             lyric_id: song.lyric_id || song.id,
             pic_id: song.pic_id || song.pic || "",
             url_id: song.url_id,
+            api_path: song.api_path,
+            j8y_api_path: song.j8y_api_path,
         }));
 
         const existingSongs = Array.isArray(state.playlistSongs) ? state.playlistSongs.slice() : [];

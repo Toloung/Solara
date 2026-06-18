@@ -30,6 +30,7 @@ const PASSWORD = process.env.PASSWORD || null;
 const ROOT_DIR = path.join(__dirname, '..');  // 项目根目录（index.html, css/, js/ 等）
 
 const app = express();
+app.set('trust proxy', true);
 
 // ─── 基础中间件 ────────────────────────────────────────────────────────────────
 app.use(cookieParser());
