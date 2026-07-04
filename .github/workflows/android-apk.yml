@@ -31,6 +31,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+          # 禁用自动 git commit wrapper 文件，避免 CI 无凭证报错
+          write-workspace-file: false
+          build-workspace-file: false
 
       - name: Build APK
         run: gradle -p android :app:assembleDebug
