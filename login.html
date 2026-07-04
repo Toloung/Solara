@@ -19,7 +19,7 @@
       const isMobileUA = /android|iphone|ipad|ipod|mobile|blackberry|phone|opera mini|windows phone/i.test(ua);
       const isSmallScreen = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 820px)").matches;
       const isMobile = isMobileUA || isSmallScreen;
-      window.__SOLARA_IS_MOBILE = isMobile;
+      window.__NANOTUNE_IS_MOBILE = isMobile;
       if (!isMobile) {
         document.documentElement.classList.add("desktop-view");
         const desktopLink = document.createElement("link");

@@ -14,7 +14,7 @@ const path = require('path');
 const fs = require('fs');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const DB_PATH  = path.join(DATA_DIR, 'solara.db');
+const DB_PATH  = path.join(DATA_DIR, 'nanotune.db');
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {

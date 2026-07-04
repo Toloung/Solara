@@ -75,14 +75,14 @@ const dom = {
     logo: document.querySelector(".header h1"),
 };
 
-window.SolaraDom = dom;
+window.NanoTuneDom = dom;
 
-const isMobileView = Boolean(window.__SOLARA_IS_MOBILE);
+const isMobileView = Boolean(window.__NANOTUNE_IS_MOBILE);
 
-const mobileBridge = window.SolaraMobileBridge || {};
+const mobileBridge = window.NanoTuneMobileBridge || {};
 mobileBridge.handlers = mobileBridge.handlers || {};
 mobileBridge.queue = Array.isArray(mobileBridge.queue) ? mobileBridge.queue : [];
-window.SolaraMobileBridge = mobileBridge;
+window.NanoTuneMobileBridge = mobileBridge;
 
 function invokeMobileHook(name, ...args) {
     if (!isMobileView) {
@@ -1348,7 +1348,7 @@ bootstrapPersistentStorage();
 
     let handlersBound = false;
     let lastPositionUpdateTime = 0;
-    const MEDIA_SESSION_ENDED_FLAG = '__solaraMediaSessionHandledEnded';
+    const MEDIA_SESSION_ENDED_FLAG = '__nanotuneMediaSessionHandledEnded';
 
     const preferLockScreenTrackControls = (() => {
         if (typeof navigator === 'undefined') {
@@ -1364,9 +1364,9 @@ bootstrapPersistentStorage();
 
     function triggerMediaSessionMetadataRefresh() {
         let refreshed = false;
-        if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
+        if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA === 'function') {
             try {
-                window.__SOLARA_UPDATE_MEDIA_METADATA();
+                window.__NANOTUNE_UPDATE_MEDIA_METADATA();
                 refreshed = true;
             } catch (error) {
                 console.warn('刷新媒体信息失败:', error);
@@ -1621,10 +1621,10 @@ bootstrapPersistentStorage();
     });
 
     // 当你在应用内切歌（更新 state.currentSong / 封面 / 标题）时，也调用一次：
-    // window.__SOLARA_UPDATE_MEDIA_METADATA = updateMediaMetadata;
+    // window.__NANOTUNE_UPDATE_MEDIA_METADATA = updateMediaMetadata;
     // 这样在你现有的切歌逻辑里，设置完新的 audio.src 后手动调用它可立即更新锁屏封面/文案。
-    if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA !== 'function') {
-        window.__SOLARA_UPDATE_MEDIA_METADATA = updateMediaMetadata;
+    if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA !== 'function') {
+        window.__NANOTUNE_UPDATE_MEDIA_METADATA = updateMediaMetadata;
     }
 
     triggerMediaSessionMetadataRefresh();
@@ -2046,8 +2046,8 @@ function showAlbumCoverPlaceholder() {
     state.currentArtworkUrl = toAbsoluteUrl(DEFAULT_COVER_URL);
     setGlobalThemeProperty("--mobile-cover-image", `url("${state.currentArtworkUrl}")`);
     queueDefaultPalette();
-    if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
-        window.__SOLARA_UPDATE_MEDIA_METADATA();
+    if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA === 'function') {
+        window.__NANOTUNE_UPDATE_MEDIA_METADATA();
     }
 }
 
@@ -2060,8 +2060,8 @@ function setAlbumCoverImage(url) {
     setGlobalThemeProperty("--mobile-cover-image", `url("${safeUrl}")`);
     dom.albumCover.innerHTML = `<img src="${safeUrl}" alt="专辑封面">`;
     dom.albumCover.classList.remove("loading");
-    if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
-        window.__SOLARA_UPDATE_MEDIA_METADATA();
+    if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA === 'function') {
+        window.__NANOTUNE_UPDATE_MEDIA_METADATA();
     }
 }
 
@@ -3887,8 +3887,8 @@ function updateCurrentSongInfo(song, options = {}) {
                         state.currentSong.rawCoverUrl = data.raw_url;
                     }
                     console.debug("[Cover] resolved", { song: state.currentSong, coverUrl: absoluteImageUrl, rawCoverUrl: data.raw_url || "" });
-                    if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
-                        window.__SOLARA_UPDATE_MEDIA_METADATA();
+                    if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA === 'function') {
+                        window.__NANOTUNE_UPDATE_MEDIA_METADATA();
                     }
                 }
                 img.crossOrigin = "anonymous";
@@ -5719,8 +5719,8 @@ async function playSong(song, options = {}) {
 
         debugLog(`开始播放: ${song.name} @${quality}`);
 
-        if (typeof window.__SOLARA_UPDATE_MEDIA_METADATA === 'function') {
-            window.__SOLARA_UPDATE_MEDIA_METADATA();
+        if (typeof window.__NANOTUNE_UPDATE_MEDIA_METADATA === 'function') {
+            window.__NANOTUNE_UPDATE_MEDIA_METADATA();
         }
     } catch (error) {
         console.error('播放歌曲失败:', error);
@@ -5782,8 +5782,8 @@ function scheduleDeferredSongAssets(song, playPromise) {
 
 // 修复：自动播放下一首 - 支持播放模式
 function autoPlayNext() {
-    if (dom.audioPlayer && dom.audioPlayer.__solaraMediaSessionHandledEnded === 'skip') {
-        dom.audioPlayer.__solaraMediaSessionHandledEnded = false;
+    if (dom.audioPlayer && dom.audioPlayer.__nanotuneMediaSessionHandledEnded === 'skip') {
+        dom.audioPlayer.__nanotuneMediaSessionHandledEnded = false;
         return;
     }
     const mode = getActivePlayMode();

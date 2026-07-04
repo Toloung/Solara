@@ -1,5 +1,5 @@
 /**
- * Solara 独立 Node.js 服务器
+ * NanoTune 独立 Node.js 服务器
  * 替代 wrangler pages dev，完全不依赖 Cloudflare/Wrangler
  *
  * 路由结构（与 Cloudflare Pages Functions 完全一致）：
@@ -75,7 +75,7 @@ app.use((req, res) => {
 // ─── 启动 ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, HOST, () => {
   console.log('');
-  console.log('  🌟 Solara Standalone Server');
+  console.log('  🌟 NanoTune Standalone Server');
   console.log('  ─────────────────────────────────────');
   console.log(`  Ready on http://${HOST}:${PORT}`);
   console.log(`  Password: ${PASSWORD ? '✓ configured' : '✗ not set (open access)'}`);

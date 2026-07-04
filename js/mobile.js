@@ -1,21 +1,21 @@
 (function () {
-    if (!window.__SOLARA_IS_MOBILE) {
+    if (!window.__NANOTUNE_IS_MOBILE) {
         return;
     }
 
-    const bridge = window.SolaraMobileBridge || {};
+    const bridge = window.NanoTuneMobileBridge || {};
     bridge.handlers = bridge.handlers || {};
     bridge.queue = Array.isArray(bridge.queue) ? bridge.queue : [];
-    window.SolaraMobileBridge = bridge;
+    window.NanoTuneMobileBridge = bridge;
 
-    const dom = window.SolaraDom || {};
+    const dom = window.NanoTuneDom || {};
     let initialized = false;
 
     function updateMobileToolbarTitleImpl() {
         if (!dom.mobileToolbarTitle) {
             return;
         }
-        dom.mobileToolbarTitle.textContent = "Music";
+        dom.mobileToolbarTitle.textContent = "正在播放";
     }
 
     function updateMobileOverlayScrim() {

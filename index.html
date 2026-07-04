@@ -23,7 +23,7 @@
             const isMobileUA = /android|iphone|ipad|ipod|mobile|blackberry|phone|opera mini|windows phone/i.test(ua);
             const isSmallScreen = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 820px)").matches;
             const isMobile = isMobileUA || isSmallScreen;
-            window.__SOLARA_IS_MOBILE = isMobile;
+            window.__NANOTUNE_IS_MOBILE = isMobile;
             if (!isMobile) {
                 document.documentElement.classList.add("desktop-view");
                 const desktopLink = document.createElement("link");
@@ -197,6 +197,12 @@
                         </button>
                     </div>
                     <div class="current-song-artist" id="currentSongArtist">未知艺术家</div>
+                </div>
+            </div>
+
+            <div class="lyrics empty" id="lyrics" data-placeholder="default">
+                <div class="lyrics-scroll" id="lyricsScroll">
+                    <div class="lyrics-content" id="lyricsContent"></div>
                 </div>
             </div>
 
@@ -438,11 +444,6 @@
                         <div class="playlist-items" id="favoriteItems"></div>
                     </div>
                 </div>
-                <div class="lyrics empty" id="lyrics" data-placeholder="default">
-                    <div class="lyrics-scroll" id="lyricsScroll">
-                        <div class="lyrics-content" id="lyricsContent"></div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -486,7 +487,7 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="js/index.js"></script>
 <script>
-    if (window.__SOLARA_IS_MOBILE) {
+    if (window.__NANOTUNE_IS_MOBILE) {
         const mobileScript = document.createElement('script');
         mobileScript.src = 'js/mobile.js';
         mobileScript.async = false;
